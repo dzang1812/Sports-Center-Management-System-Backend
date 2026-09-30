@@ -327,6 +327,41 @@ namespace SportsCenter.Repository.Migrations
                     b.ToTable("CoachProfiles");
                 });
 
+            modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EmailTokens");
+                });
+
             modelBuilder.Entity("SportsCenter.Repository.Entities.Exercise", b =>
                 {
                     b.Property<int>("Id")
@@ -367,13 +402,7 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("text");
 
-                    b.Property<DateOnly?>("DateOfBirth")
-                        .HasColumnType("date");
-
                     b.Property<string>("EmergencyContact")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Gender")
                         .HasColumnType("text");
 
                     b.Property<string>("Goal")
@@ -814,18 +843,33 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
 
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("EmailVerified")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Gender")
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean");
 
                     b.Property<string>("PasswordHash")
@@ -1002,6 +1046,17 @@ namespace SportsCenter.Repository.Migrations
                     b.HasOne("SportsCenter.Repository.Entities.User", "User")
                         .WithOne("CoachProfile")
                         .HasForeignKey("SportsCenter.Repository.Entities.CoachProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

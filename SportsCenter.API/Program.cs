@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.OpenApi.Models;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Auth;
+using SportsCenter.Services.Email;
+using SportsCenter.Services.Profile;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,12 +37,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.Configure<MailOptions>(builder.Configuration.GetSection(MailOptions.SectionName));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IMeService, MeService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(o =>
+{
+    // Adds the "Authorize" button: paste the JWT from /api/auth/login (no "Bearer " prefix).
+    o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+    });
+    o.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = [],
+    });
+});
 
 var app = builder.Build();
 

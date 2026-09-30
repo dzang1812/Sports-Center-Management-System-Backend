@@ -8,5 +8,5 @@ public class JwtOptions
     public string Key { get; set; } = "";
     public string Issuer { get; set; } = "SportsCenter.API";
     public string Audience { get; set; } = "SportsCenter.Client";
-    public int ExpiryMinutes { get; set; } = 120;
+    public int ExpiryMinutes { get; set; } = 480;
 }

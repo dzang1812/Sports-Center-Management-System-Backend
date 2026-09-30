@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SportsCenter.Services.Auth;
 
@@ -30,6 +32,34 @@ public class AuthController(IAuthService authService) : ControllerBase
         catch (AuthException ex)
         {
             return Unauthorized(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailRequest request)
+    {
+        try
+        {
+            await authService.VerifyEmailAsync(request.Token);
+            return NoContent();
+        }
+        catch (AuthException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("resend-verification"), Authorize]
+    public async Task<IActionResult> ResendVerification()
+    {
+        try
+        {
+            await authService.ResendVerificationAsync(int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!));
+            return NoContent();
+        }
+        catch (AuthException ex)
+        {
+            return BadRequest(new { error = ex.Message });
         }
     }
 }
