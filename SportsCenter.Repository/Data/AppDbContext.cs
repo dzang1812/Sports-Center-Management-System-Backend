@@ -46,6 +46,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<EmailToken>().HasIndex(t => t.TokenHash).IsUnique();
         b.Entity<MemberProfile>().HasKey(p => p.UserId);
         b.Entity<CoachProfile>().HasKey(p => p.UserId);
+        b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
         b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique();

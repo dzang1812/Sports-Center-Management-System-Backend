@@ -67,6 +67,43 @@ public class AuthService(IUserRepository users, IOptions<JwtOptions> jwtOptions,
         await SendVerificationAsync(user);
     }
 
+    // Always completes silently so the caller can't tell whether the email exists.
+    public async Task ForgotPasswordAsync(string email)
+    {
+        var user = await users.GetByEmailAsync(email.Trim().ToLowerInvariant());
+        if (user is null || !user.IsActive) return;
+
+        try
+        {
+            var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            await users.AddTokenAsync(new EmailToken
+            {
+                UserId = user.Id,
+                Purpose = TokenPurpose.ResetPassword,
+                TokenHash = Hash(raw),
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+            });
+            await users.SaveChangesAsync();
+
+            var link = $"{mailOptions.Value.FrontendUrl}/reset-password?token={raw}";
+            await mail.SendAsync(user.Email, "Đặt lại mật khẩu",
+                $"Chào {user.FullName},\n\nBấm vào link để đặt lại mật khẩu (hết hạn sau 15 phút, chỉ dùng 1 lần):\n{link}\n\nNếu bạn không yêu cầu, hãy bỏ qua email này.");
+        }
+        catch (Exception ex) { log.LogError(ex, "Could not send reset mail to {Email}", user.Email); }
+    }
+
+    public async Task ResetPasswordAsync(string token, string newPassword)
+    {
+        var t = await users.GetTokenAsync(Hash(token), TokenPurpose.ResetPassword);
+        if (t is null || t.UsedAt is not null || t.ExpiresAt < DateTime.UtcNow || !t.User.IsActive)
+            throw new AuthException("Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
+
+        t.UsedAt = DateTime.UtcNow;
+        t.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        t.User.MustChangePassword = false;
+        await users.SaveChangesAsync();
+    }
+
     private async Task TrySendVerificationAsync(User user)
     {
         try { await SendVerificationAsync(user); }

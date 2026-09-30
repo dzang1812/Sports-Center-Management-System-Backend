@@ -39,6 +39,7 @@ public class CoachProfile
     public User User { get; set; } = null!;
     public string? Bio { get; set; }
     public string? Certifications { get; set; }
+    public List<Sport> Sports { get; set; } = []; // specialties; Gym/Boxing coaches can take PT
 }
 
 // One-time link token sent by email (verify address / reset password). Only the SHA-256 hash is stored.

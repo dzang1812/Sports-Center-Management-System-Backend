@@ -62,4 +62,25 @@ public class AuthController(IAuthService authService) : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPost("forgot")]
+    public async Task<IActionResult> Forgot(ForgotPasswordRequest request)
+    {
+        await authService.ForgotPasswordAsync(request.Email);
+        return NoContent();
+    }
+
+    [HttpPost("reset")]
+    public async Task<IActionResult> Reset(ResetPasswordRequest request)
+    {
+        try
+        {
+            await authService.ResetPasswordAsync(request.Token, request.NewPassword);
+            return NoContent();
+        }
+        catch (AuthException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

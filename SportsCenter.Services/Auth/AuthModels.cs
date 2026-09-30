@@ -18,3 +18,10 @@ public record AuthResponse(string Token, DateTime ExpiresAt, int UserId, string 
 public class AuthException(string message) : Exception(message);
 
 public record VerifyEmailRequest([param: Required] string Token);
+
+public record ForgotPasswordRequest([param: Required, EmailAddress(ErrorMessage = "Email sai định dạng")] string Email);
+
+public record ResetPasswordRequest(
+    [param: Required] string Token,
+    [param: Required(ErrorMessage = "Mật khẩu mới là bắt buộc"),
+     RegularExpression(@"^(?=.*[A-Za-z])(?=.*\d).{8,}$", ErrorMessage = "Mật khẩu tối thiểu 8 ký tự, gồm chữ và số")] string NewPassword);

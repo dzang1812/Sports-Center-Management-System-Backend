@@ -1,3 +1,4 @@
+using SportsCenter.API;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -6,14 +7,17 @@ using Microsoft.OpenApi.Models;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Auth;
+using SportsCenter.Services.Audit;
 using SportsCenter.Services.Email;
 using SportsCenter.Services.Profile;
+using SportsCenter.Services.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(o =>
+    o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())); // enums as strings ("Coach")
 builder.Services.AddDbContext<SportsCenter.Repository.Data.AppDbContext>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
@@ -41,6 +45,8 @@ builder.Services.Configure<MailOptions>(builder.Configuration.GetSection(MailOpt
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMeService, MeService>();
+builder.Services.AddScoped<IUserAdminService, UserAdminService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -66,6 +72,12 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    await DemoSeeder.SeedAsync(scope.ServiceProvider.GetRequiredService<SportsCenter.Repository.Data.AppDbContext>());
 }
 
 app.UseHttpsRedirection();

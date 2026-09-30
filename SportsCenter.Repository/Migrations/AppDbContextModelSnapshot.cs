@@ -22,6 +22,21 @@ namespace SportsCenter.Repository.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CoachProfileSport", b =>
+                {
+                    b.Property<int>("CoachProfileUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SportsId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("CoachProfileUserId", "SportsId");
+
+                    b.HasIndex("SportsId");
+
+                    b.ToTable("CoachProfileSport");
+                });
+
             modelBuilder.Entity("SportsCenter.Repository.Entities.AiChatMessage", b =>
                 {
                     b.Property<int>("Id")
@@ -889,6 +904,21 @@ namespace SportsCenter.Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("CoachProfileSport", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.CoachProfile", null)
+                        .WithMany()
+                        .HasForeignKey("CoachProfileUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.Sport", null)
+                        .WithMany()
+                        .HasForeignKey("SportsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.AiChatMessage", b =>
