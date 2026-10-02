@@ -31,3 +31,4 @@ public sealed class AttendanceController(IScheduleAttendanceService service) : C
     [HttpPut("api/pt/bookings/{bookingId:int}/attendance")]
     public Task<List<RosterItem>> PtAttendance(int bookingId, BulkAttendanceRequest request, CancellationToken ct) => service.MarkPtAttendanceAsync(CoachId, bookingId, request, ct);
 }
+// done 
