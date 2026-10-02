@@ -14,6 +14,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<ClassSession> ClassSessions => Set<ClassSession>();
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
+    public DbSet<ClassBooking> ClassBookings => Set<ClassBooking>();
+    public DbSet<CoachAvailability> CoachAvailabilities => Set<CoachAvailability>();
+    public DbSet<PtBooking> PtBookings => Set<PtBooking>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<MembershipPlan> MembershipPlans => Set<MembershipPlan>();
@@ -49,8 +52,42 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
-        b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique();
+        b.Entity<Sport>().HasIndex(s => s.Name).IsUnique();
+        b.Entity<Room>().HasIndex(r => r.Name).IsUnique();
+        b.Entity<ClassSession>().HasIndex(s => new { s.ClassId, s.Date, s.StartTime }).IsUnique();
+        b.Entity<ClassBooking>().HasIndex(x => new { x.SessionId, x.MemberId })
+            .IsUnique().HasFilter("\"Status\" = 'Confirmed'");
+        b.Entity<PtBooking>().HasIndex(x => new { x.CoachId, x.Date, x.StartTime })
+            .IsUnique().HasFilter("\"Status\" = 'Confirmed'");
+        b.Entity<CoachAvailability>().HasIndex(x => new { x.CoachId, x.DayOfWeek, x.StartTime })
+            .IsUnique().HasFilter("\"IsActive\"");
+        b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique()
+            .HasFilter("\"SessionId\" IS NOT NULL");
+        b.Entity<Attendance>().HasIndex(a => new { a.PtBookingId, a.MemberId }).IsUnique()
+            .HasFilter("\"PtBookingId\" IS NOT NULL");
+        b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
+
+        b.Entity<Sport>().ToTable(t => t.HasCheckConstraint(
+            "CK_Sport_Capability", "\"HasClasses\" OR \"HasPt\""));
+        b.Entity<Room>().ToTable(t => t.HasCheckConstraint("CK_Room_Capacity", "\"Capacity\" > 0"));
+        b.Entity<Class>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_Class_Capacity", "\"Capacity\" > 0");
+            t.HasCheckConstraint("CK_Class_Dates", "\"EndDate\" > \"StartDate\"");
+        });
+        b.Entity<ClassSession>().ToTable(t => t.HasCheckConstraint(
+            "CK_ClassSession_Times", "\"EndTime\" > \"StartTime\""));
+        b.Entity<CoachAvailability>().ToTable(t => t.HasCheckConstraint(
+            "CK_CoachAvailability_Times", "\"EndTime\" > \"StartTime\""));
+        b.Entity<PtBooking>().ToTable(t => t.HasCheckConstraint(
+            "CK_PtBooking_OneHour", "\"EndTime\" = \"StartTime\" + interval '1 hour'"));
+        b.Entity<MembershipPlan>().ToTable(t => t.HasCheckConstraint(
+            "CK_MembershipPlan_PtCredits", "\"PtSessionCredits\" >= 0"));
+        b.Entity<MemberSubscription>().ToTable(t => t.HasCheckConstraint(
+            "CK_MemberSubscription_RemainingPt", "\"RemainingPtSessions\" >= 0"));
+        b.Entity<Attendance>().ToTable(t => t.HasCheckConstraint(
+            "CK_Attendance_Target", "(\"SessionId\" IS NULL) <> (\"PtBookingId\" IS NULL)"));
 
         b.Entity<TrainingPlan>().ToTable(t => t.HasCheckConstraint(
             "CK_TrainingPlan_Target", "(\"MemberId\" IS NULL) <> (\"ClassId\" IS NULL)"));
