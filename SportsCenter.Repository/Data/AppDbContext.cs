@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<MemberProfile> MemberProfiles => Set<MemberProfile>();
+    public DbSet<EmailToken> EmailTokens => Set<EmailToken>();
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
     public DbSet<Sport> Sports => Set<Sport>();
     public DbSet<Room> Rooms => Set<Room>();
@@ -42,8 +43,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             fk.DeleteBehavior = DeleteBehavior.Restrict;
 
         b.Entity<User>().HasIndex(u => u.Email).IsUnique();
+        b.Entity<EmailToken>().HasIndex(t => t.TokenHash).IsUnique();
         b.Entity<MemberProfile>().HasKey(p => p.UserId);
         b.Entity<CoachProfile>().HasKey(p => p.UserId);
+        b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
         b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique();
