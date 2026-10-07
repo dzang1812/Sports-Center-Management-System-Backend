@@ -512,6 +512,9 @@ namespace SportsCenter.Repository.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<string>("CheckoutUrl")
+                        .HasColumnType("text");
+
                     b.Property<string>("InvoiceNumber")
                         .HasColumnType("text");
 
@@ -527,6 +530,15 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<DateTime>("PaidAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PayOsOrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PayOsPaymentLinkId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("QrCode")
+                        .HasColumnType("text");
 
                     b.Property<int?>("ReceivedById")
                         .HasColumnType("integer");
@@ -544,6 +556,9 @@ namespace SportsCenter.Repository.Migrations
                         .IsUnique();
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("PayOsOrderCode")
+                        .IsUnique();
 
                     b.HasIndex("ReceivedById");
 

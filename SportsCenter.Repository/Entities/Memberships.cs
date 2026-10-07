@@ -23,6 +23,8 @@ public class MemberSubscription
     public SubscriptionStatus Status { get; set; } = SubscriptionStatus.Active;
 }
 
+// All payments go through PayOS (bank transfer / VietQR), Member self-service or Receptionist-assisted.
+// Status starts Pending at link creation; the PayOS webhook flips it to Paid/Failed (see SubscriptionService).
 public class Payment
 {
     public int Id { get; set; }
@@ -30,12 +32,17 @@ public class Payment
     public User Member { get; set; } = null!;
     public int? SubscriptionId { get; set; }
     public MemberSubscription? Subscription { get; set; }
-    public int? ReceivedById { get; set; } // receptionist; null = paid online
+    public int? ReceivedById { get; set; } // Receptionist who set up the link for the member at the desk, if any
     public User? ReceivedBy { get; set; }
     public decimal Amount { get; set; }
-    public PaymentMethod Method { get; set; }
-    public PaymentStatus Status { get; set; } = PaymentStatus.Paid;
-    public string? InvoiceNumber { get; set; } // unique when set
+    public PaymentMethod Method { get; set; } = PaymentMethod.BankTransfer;
+    public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
+    public string? InvoiceNumber { get; set; } // set once Paid; unique when set
     public string? Note { get; set; }
-    public DateTime PaidAt { get; set; } = DateTime.UtcNow;
+    public DateTime PaidAt { get; set; } = DateTime.UtcNow; // meaningful only once Status = Paid
+
+    public long PayOsOrderCode { get; set; } // = Id, sent to PayOS as orderCode (already globally unique)
+    public string? PayOsPaymentLinkId { get; set; }
+    public string? CheckoutUrl { get; set; }
+    public string? QrCode { get; set; }
 }

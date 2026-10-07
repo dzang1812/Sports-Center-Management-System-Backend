@@ -1,0 +1,30 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using PayOS.Models.Webhooks;
+using SportsCenter.Services.Membership;
+
+namespace SportsCenter.API.Controllers;
+
+[ApiController, Route("api/payments")]
+public sealed class PaymentsController(ISubscriptionService service) : ControllerBase
+{
+    private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    [HttpGet("{id:int}"), Authorize]
+    public Task<PaymentDto> Get(int id, CancellationToken ct) => service.GetPaymentAsync(ActorId, id, ct);
+
+    // PayOS calls this directly (no JWT); Webhooks.VerifyAsync inside the service checks the signature.
+    [HttpPost("payos-webhook"), AllowAnonymous]
+    public async Task<IActionResult> PayOsWebhook(Webhook webhook, CancellationToken ct)
+    {
+        await service.HandleWebhookAsync(webhook, ct);
+        return Ok();
+    }
+
+    // One-off: run after deploying, to register the real public URL with PayOS (dashboard shows an error
+    // "Chưa cấu hình webhook" until this succeeds once). Not callable against a localhost URL.
+    [HttpPost("payos/confirm-webhook"), Authorize(Roles = "Manager")]
+    public async Task<IActionResult> ConfirmWebhook([FromBody] string webhookUrl, CancellationToken ct) =>
+        Ok(new { webhookUrl = await service.ConfirmWebhookUrlAsync(ActorId, webhookUrl, ct) });
+}

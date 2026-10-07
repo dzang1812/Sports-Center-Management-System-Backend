@@ -48,6 +48,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
         b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
+        b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
 
         b.Entity<TrainingPlan>().ToTable(t => t.HasCheckConstraint(
             "CK_TrainingPlan_Target", "(\"MemberId\" IS NULL) <> (\"ClassId\" IS NULL)"));
