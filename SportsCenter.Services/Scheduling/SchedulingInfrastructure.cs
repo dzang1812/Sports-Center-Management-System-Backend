@@ -7,6 +7,19 @@ using SportsCenter.Repository.Entities;
 
 namespace SportsCenter.Services.Scheduling;
 
+public sealed class SchedulingOptions
+{
+    public const string SectionName = "Scheduling";
+    public int ClassCancellationCutoffHours { get; set; } = 12;
+    public int PtCancellationCutoffHours { get; set; } = 12;
+    public bool AllowLateClassCancellation { get; set; } = true;
+    public bool AllowLatePtCancellation { get; set; } = true;
+    public int? ClassBookingOpensDaysBefore { get; set; }
+    public int ClassBookingClosesMinutesBefore { get; set; }
+    public int? PtBookingOpensDaysBefore { get; set; }
+    public int PtBookingClosesMinutesBefore { get; set; }
+}
+
 public sealed class SchedulingException(string errorCode, string message, int statusCode = 400, object? details = null) : Exception(message)
 {
     public string ErrorCode { get; } = errorCode;
@@ -88,7 +101,16 @@ public sealed class SchedulingTransaction(AppDbContext db) : ISchedulingTransact
 
 public static class SchedulingRules
 {
-    public static bool MeetsCancellationCutoff(DateTime startUtc, DateTime nowUtc) => startUtc - nowUtc >= TimeSpan.FromHours(12);
+    public static bool MeetsCancellationCutoff(DateTime startUtc, DateTime nowUtc, int cutoffHours) =>
+        startUtc - nowUtc >= TimeSpan.FromHours(cutoffHours);
+
+    public static void EnsureBookingWindow(DateTime startUtc, DateTime nowUtc, int? opensDaysBefore, int closesMinutesBefore)
+    {
+        if (startUtc <= nowUtc.AddMinutes(closesMinutesBefore))
+            throw SchedulingException.Conflict("BOOKING_CLOSED", "Thoi gian dat lich da dong.");
+        if (opensDaysBefore is { } days && startUtc > nowUtc.AddDays(days))
+            throw SchedulingException.Conflict("BOOKING_NOT_OPEN", "Chua den thoi gian duoc phep dat lich.");
+    }
 
     public static async Task EnsureActiveActorAsync(AppDbContext db, int actorId, UserRole role, CancellationToken ct)
     {

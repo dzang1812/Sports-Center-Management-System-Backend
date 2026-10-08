@@ -245,6 +245,9 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("NotificationRevision")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RoomId")
                         .HasColumnType("integer");
 
@@ -293,6 +296,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsLateCancellation")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("MemberId")
                         .HasColumnType("integer");
@@ -369,6 +375,12 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AttendanceFinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("AttendanceFinalizedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CancellationReason")
                         .HasColumnType("text");
 
@@ -378,8 +390,15 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int?>("CancelledByUserId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ClassId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ClassName")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int?>("CoachId")
                         .HasColumnType("integer");
@@ -393,8 +412,15 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<TimeOnly>("EndTime")
                         .HasColumnType("time without time zone");
 
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Note")
                         .HasColumnType("text");
+
+                    b.Property<int>("NotificationRevision")
+                        .HasColumnType("integer");
 
                     b.Property<int>("RoomId")
                         .HasColumnType("integer");
@@ -408,6 +434,8 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AttendanceFinalizedByUserId");
+
                     b.HasIndex("CancelledByUserId");
 
                     b.HasIndex("CoachId");
@@ -419,6 +447,8 @@ namespace SportsCenter.Repository.Migrations
 
                     b.ToTable("ClassSessions", t =>
                         {
+                            t.HasCheckConstraint("CK_ClassSession_Capacity", "\"Capacity\" > 0");
+
                             t.HasCheckConstraint("CK_ClassSession_Times", "\"EndTime\" > \"StartTime\"");
                         });
                 });
@@ -804,6 +834,12 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AttendanceFinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("AttendanceFinalizedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CancellationReason")
                         .HasColumnType("text");
 
@@ -831,6 +867,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<TimeOnly>("EndTime")
                         .HasColumnType("time without time zone");
 
+                    b.Property<bool>("IsLateCancellation")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("MemberId")
                         .HasColumnType("integer");
 
@@ -854,6 +893,8 @@ namespace SportsCenter.Repository.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AttendanceFinalizedByUserId");
 
                     b.HasIndex("CancelledByUserId");
 
@@ -1383,6 +1424,11 @@ namespace SportsCenter.Repository.Migrations
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.ClassSession", b =>
                 {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "AttendanceFinalizedByUser")
+                        .WithMany()
+                        .HasForeignKey("AttendanceFinalizedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "CancelledByUser")
                         .WithMany()
                         .HasForeignKey("CancelledByUserId")
@@ -1404,6 +1450,8 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("AttendanceFinalizedByUser");
 
                     b.Navigation("CancelledByUser");
 
@@ -1569,6 +1617,11 @@ namespace SportsCenter.Repository.Migrations
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.PtBooking", b =>
                 {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "AttendanceFinalizedByUser")
+                        .WithMany()
+                        .HasForeignKey("AttendanceFinalizedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "CancelledByUser")
                         .WithMany()
                         .HasForeignKey("CancelledByUserId")
@@ -1608,6 +1661,8 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("SubscriptionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("AttendanceFinalizedByUser");
 
                     b.Navigation("CancelledByUser");
 

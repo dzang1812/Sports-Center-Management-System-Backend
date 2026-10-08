@@ -106,7 +106,18 @@ public static class DemoSeeder
         for (var date = demoClass.StartDate; date <= demoClass.EndDate; date = date.AddDays(1))
             if (date.DayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Thursday &&
                 !await db.ClassSessions.AnyAsync(x => x.ClassId == demoClass.Id && x.Date == date && x.StartTime == new TimeOnly(18, 0)))
-                db.ClassSessions.Add(new ClassSession { ClassId = demoClass.Id, CoachId = yogaCoach.Id, RoomId = activeRoom.Id, Date = date, StartTime = new(18, 0), EndTime = new(19, 0) });
+                db.ClassSessions.Add(new ClassSession
+                {
+                    ClassId = demoClass.Id,
+                    CoachId = yogaCoach.Id,
+                    RoomId = activeRoom.Id,
+                    ClassName = demoClass.Name,
+                    Level = demoClass.Level,
+                    Capacity = demoClass.Capacity,
+                    Date = date,
+                    StartTime = new(18, 0),
+                    EndTime = new(19, 0),
+                });
         await db.SaveChangesAsync();
     }
 

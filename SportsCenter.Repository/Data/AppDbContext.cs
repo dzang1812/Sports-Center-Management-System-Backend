@@ -76,8 +76,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             t.HasCheckConstraint("CK_Class_Capacity", "\"Capacity\" > 0");
             t.HasCheckConstraint("CK_Class_Dates", "\"EndDate\" > \"StartDate\"");
         });
-        b.Entity<ClassSession>().ToTable(t => t.HasCheckConstraint(
-            "CK_ClassSession_Times", "\"EndTime\" > \"StartTime\""));
+        b.Entity<ClassSession>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ClassSession_Times", "\"EndTime\" > \"StartTime\"");
+            t.HasCheckConstraint("CK_ClassSession_Capacity", "\"Capacity\" > 0");
+        });
         b.Entity<CoachAvailability>().ToTable(t => t.HasCheckConstraint(
             "CK_CoachAvailability_Times", "\"EndTime\" > \"StartTime\""));
         b.Entity<PtBooking>().ToTable(t => t.HasCheckConstraint(

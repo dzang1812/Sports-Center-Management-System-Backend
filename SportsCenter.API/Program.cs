@@ -31,6 +31,13 @@ builder.Services.AddDbContext<SportsCenter.Repository.Data.AppDbContext>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.AddOptions<SchedulingOptions>()
+    .Bind(builder.Configuration.GetSection(SchedulingOptions.SectionName))
+    .Validate(x => x.ClassCancellationCutoffHours >= 0 && x.PtCancellationCutoffHours >= 0 &&
+        x.ClassBookingClosesMinutesBefore >= 0 && x.PtBookingClosesMinutesBefore >= 0 &&
+        x.ClassBookingOpensDaysBefore is null or >= 0 && x.PtBookingOpensDaysBefore is null or >= 0,
+        "Scheduling options must be non-negative.")
+    .ValidateOnStart();
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>();
 if (string.IsNullOrWhiteSpace(jwt?.Key))
     throw new InvalidOperationException(
@@ -63,6 +70,7 @@ builder.Services.AddScoped<IClassScheduleService, ClassScheduleService>();
 builder.Services.AddScoped<IClassBookingService, ClassBookingService>();
 builder.Services.AddScoped<IPtService, PtService>();
 builder.Services.AddScoped<IScheduleAttendanceService, ScheduleAttendanceService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

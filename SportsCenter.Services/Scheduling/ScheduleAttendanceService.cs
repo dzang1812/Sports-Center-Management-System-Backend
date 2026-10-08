@@ -12,7 +12,8 @@ public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions
     List<AttendanceHistoryItem> Items, string Formula);
 public record CoachScheduleItem(string Type, int ReferenceId, string Title, string Sport, DateOnly Date, TimeOnly StartTime,
     TimeOnly EndTime, int? RoomId, string? Room, int ParticipantCount, SessionStatus Status);
-public record RosterItem(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus Status);
+public record RosterItem(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus Status,
+    bool AttendanceRecorded = false, bool AttendanceFinalized = false);
 public record AttendanceEntry(int MemberId, AttendanceStatus Status = AttendanceStatus.Absent);
 public record BulkAttendanceRequest([param: Required, MinLength(1)] List<AttendanceEntry> Items);
 
@@ -40,7 +41,7 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
             classQuery = classQuery.Where(x => x.Status != BookingStatus.Cancelled);
             ptQuery = ptQuery.Where(x => x.Status != BookingStatus.Cancelled);
         }
-        var classes = await classQuery.Select(x => new PersonalScheduleItem("Class", x.Id, x.SessionId, x.Session.Class.Name,
+        var classes = await classQuery.Select(x => new PersonalScheduleItem("Class", x.Id, x.SessionId, x.Session.ClassName,
             x.Session.Class.Sport.Name, x.Session.Date, x.Session.StartTime, x.Session.EndTime, x.Session.RoomId, x.Session.Room.Name,
             x.Session.CoachId!.Value, x.Session.Coach!.FullName, x.Status)).ToListAsync(ct);
         var pts = await ptQuery.Select(x => new PersonalScheduleItem("PT", x.Id, x.Id, "Personal Training", x.Sport.Name,
@@ -55,12 +56,15 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
         var from = new DateOnly(year, month, 1);
         var to = from.AddMonths(1);
         var today = DateOnly.FromDateTime(clock.LocalNow);
-        var classRows = await db.Attendances.AsNoTracking().Where(x => x.MemberId == memberId && x.SessionId != null &&
-                x.Session!.Status != SessionStatus.Cancelled && x.Session.Date >= from && x.Session.Date < to && x.Session.Date <= today)
-            .Select(x => new { Item = new AttendanceHistoryItem("Class", x.SessionId!.Value, x.Session!.Class.Name, x.Session.Date, x.Status), x.Session.EndTime }).ToListAsync(ct);
-        var ptRows = await db.Attendances.AsNoTracking().Where(x => x.MemberId == memberId && x.PtBookingId != null &&
-                x.PtBooking!.Status != BookingStatus.Cancelled && x.PtBooking.Date >= from && x.PtBooking.Date < to && x.PtBooking.Date <= today)
-            .Select(x => new { Item = new AttendanceHistoryItem("PT", x.PtBookingId!.Value, "Personal Training", x.PtBooking!.Date, x.Status), x.PtBooking.EndTime }).ToListAsync(ct);
+        var classRows = await db.ClassBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status == BookingStatus.Confirmed &&
+                x.Session.Status != SessionStatus.Cancelled && x.Session.AttendanceFinalizedAt != null &&
+                x.Session.Date >= from && x.Session.Date < to && x.Session.Date <= today)
+            .Select(x => new { Item = new AttendanceHistoryItem("Class", x.SessionId, x.Session.ClassName, x.Session.Date,
+                db.Attendances.Where(a => a.SessionId == x.SessionId && a.MemberId == memberId).Select(a => a.Status).Single()), x.Session.EndTime }).ToListAsync(ct);
+        var ptRows = await db.PtBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status != BookingStatus.Cancelled &&
+                x.AttendanceFinalizedAt != null && x.Date >= from && x.Date < to && x.Date <= today)
+            .Select(x => new { Item = new AttendanceHistoryItem("PT", x.Id, "Personal Training", x.Date,
+                db.Attendances.Where(a => a.PtBookingId == x.Id && a.MemberId == memberId).Select(a => a.Status).Single()), x.EndTime }).ToListAsync(ct);
         var items = classRows.Where(x => clock.ToUtc(x.Item.Date, x.EndTime) <= clock.UtcNow).Select(x => x.Item)
             .Concat(ptRows.Where(x => clock.ToUtc(x.Item.Date, x.EndTime) <= clock.UtcNow).Select(x => x.Item)).OrderBy(x => x.Date).ToList();
         var attended = items.Count(x => x.Status is AttendanceStatus.Present or AttendanceStatus.Late);
@@ -74,7 +78,7 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
         ValidateRange(from, to, 180);
         await EnsureCoachAsync(coachId, ct);
         var classes = await db.ClassSessions.AsNoTracking().Where(x => x.CoachId == coachId && x.Date >= from && x.Date <= to)
-            .Select(x => new CoachScheduleItem("Class", x.Id, x.Class.Name, x.Class.Sport.Name, x.Date, x.StartTime, x.EndTime,
+            .Select(x => new CoachScheduleItem("Class", x.Id, x.ClassName, x.Class.Sport.Name, x.Date, x.StartTime, x.EndTime,
                 x.RoomId, x.Room.Name, db.ClassBookings.Count(b => b.SessionId == x.Id && b.Status == BookingStatus.Confirmed), x.Status)).ToListAsync(ct);
         var pts = await db.PtBookings.AsNoTracking().Where(x => x.CoachId == coachId && x.Date >= from && x.Date <= to)
             .Select(x => new CoachScheduleItem("PT", x.Id, "Personal Training", x.Sport.Name, x.Date, x.StartTime, x.EndTime,
@@ -104,11 +108,12 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
             var session = await db.ClassSessions.Include(x => x.Class).FirstOrDefaultAsync(x => x.Id == sessionId, token)
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
             if (session.CoachId != coachId) throw SchedulingException.Forbidden("SESSION_NOT_OWNED", "Huấn luyện viên chỉ được điểm danh buổi của mình.");
-            ValidateAttendanceDay(session.Date, session.Status == SessionStatus.Cancelled);
+            ValidateAttendanceDay(session.Date, session.StartTime, session.Status == SessionStatus.Cancelled);
             var memberIds = request.Items.Select(x => x.MemberId).ToList();
-            var validIds = await db.ClassBookings.Where(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed && memberIds.Contains(x.MemberId))
+            var validIds = await db.ClassBookings.Where(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed)
                 .Select(x => x.MemberId).ToListAsync(token);
-            if (validIds.Count != memberIds.Count) throw new SchedulingException("INVALID_ROSTER_MEMBER", "Có hội viên không có booking hiệu lực trong buổi học.");
+            if (validIds.Count != memberIds.Count || validIds.Except(memberIds).Any())
+                throw new SchedulingException("ATTENDANCE_INCOMPLETE_ROSTER", "Báo cáo điểm danh phải chứa đúng toàn bộ booking còn hiệu lực.");
             var existing = await db.Attendances.Where(x => x.SessionId == sessionId && memberIds.Contains(x.MemberId)).ToDictionaryAsync(x => x.MemberId, token);
             foreach (var entry in request.Items)
             {
@@ -116,6 +121,8 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
                 { attendance.Status = entry.Status; attendance.MarkedById = coachId; attendance.MarkedAt = clock.UtcNow; }
                 else db.Attendances.Add(new Attendance { SessionId = sessionId, MemberId = entry.MemberId, Status = entry.Status, MarkedById = coachId, MarkedAt = clock.UtcNow });
             }
+            session.AttendanceFinalizedAt = clock.UtcNow;
+            session.AttendanceFinalizedByUserId = coachId;
             SchedulingRules.AddAudit(db, coachId, "Attendance.ClassUpsert", nameof(ClassSession), sessionId, request);
             await db.SaveChangesAsync(token);
             return await ClassRosterAsync(sessionId, token);
@@ -130,13 +137,15 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
             var booking = await db.PtBookings.FirstOrDefaultAsync(x => x.Id == bookingId, token)
                 ?? throw SchedulingException.NotFound("PT_BOOKING_NOT_FOUND", "Không tìm thấy booking PT.");
             if (booking.CoachId != coachId) throw SchedulingException.Forbidden("BOOKING_NOT_OWNED", "Huấn luyện viên chỉ được điểm danh lịch PT của mình.");
-            ValidateAttendanceDay(booking.Date, booking.Status == BookingStatus.Cancelled);
+            ValidateAttendanceDay(booking.Date, booking.StartTime, booking.Status == BookingStatus.Cancelled);
             if (request.Items.Count != 1 || request.Items[0].MemberId != booking.MemberId || booking.Status != BookingStatus.Confirmed)
                 throw new SchedulingException("INVALID_ROSTER_MEMBER", "PT attendance phải là hội viên có booking hiệu lực.");
             var entry = request.Items[0];
             var attendance = await db.Attendances.FirstOrDefaultAsync(x => x.PtBookingId == bookingId && x.MemberId == entry.MemberId, token);
             if (attendance is null) db.Attendances.Add(new Attendance { PtBookingId = bookingId, MemberId = entry.MemberId, Status = entry.Status, MarkedById = coachId, MarkedAt = clock.UtcNow });
             else { attendance.Status = entry.Status; attendance.MarkedById = coachId; attendance.MarkedAt = clock.UtcNow; }
+            booking.AttendanceFinalizedAt = clock.UtcNow;
+            booking.AttendanceFinalizedByUserId = coachId;
             SchedulingRules.AddAudit(db, coachId, "Attendance.PtUpsert", nameof(PtBooking), bookingId, request);
             await db.SaveChangesAsync(token);
             return await PtRosterAsync(bookingId, token);
@@ -145,11 +154,13 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
     private Task<List<RosterItem>> ClassRosterAsync(int sessionId, CancellationToken ct) => db.ClassBookings.AsNoTracking()
         .Where(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed)
         .OrderBy(x => x.Member.FullName).Select(x => new RosterItem(x.MemberId, x.Member.FullName, x.Member.Email, x.Id,
-            db.Attendances.Where(a => a.SessionId == sessionId && a.MemberId == x.MemberId).Select(a => (AttendanceStatus?)a.Status).FirstOrDefault() ?? AttendanceStatus.Absent)).ToListAsync(ct);
+            db.Attendances.Where(a => a.SessionId == sessionId && a.MemberId == x.MemberId).Select(a => (AttendanceStatus?)a.Status).FirstOrDefault() ?? AttendanceStatus.Absent,
+            db.Attendances.Any(a => a.SessionId == sessionId && a.MemberId == x.MemberId), x.Session.AttendanceFinalizedAt != null)).ToListAsync(ct);
 
     private Task<List<RosterItem>> PtRosterAsync(int bookingId, CancellationToken ct) => db.PtBookings.AsNoTracking().Where(x => x.Id == bookingId && x.Status == BookingStatus.Confirmed)
         .Select(x => new RosterItem(x.MemberId, x.Member.FullName, x.Member.Email, x.Id,
-            db.Attendances.Where(a => a.PtBookingId == bookingId && a.MemberId == x.MemberId).Select(a => (AttendanceStatus?)a.Status).FirstOrDefault() ?? AttendanceStatus.Absent)).ToListAsync(ct);
+            db.Attendances.Where(a => a.PtBookingId == bookingId && a.MemberId == x.MemberId).Select(a => (AttendanceStatus?)a.Status).FirstOrDefault() ?? AttendanceStatus.Absent,
+            db.Attendances.Any(a => a.PtBookingId == bookingId && a.MemberId == x.MemberId), x.AttendanceFinalizedAt != null)).ToListAsync(ct);
 
     private async Task OwnsClassSessionAsync(int coachId, int sessionId, CancellationToken ct)
     {
@@ -167,10 +178,12 @@ public sealed class ScheduleAttendanceService(AppDbContext db, ISchedulingTransa
         if (owner != coachId) throw SchedulingException.Forbidden("BOOKING_NOT_OWNED", "Huấn luyện viên chỉ được xem roster của mình.");
     }
 
-    private void ValidateAttendanceDay(DateOnly date, bool cancelled)
+    private void ValidateAttendanceDay(DateOnly date, TimeOnly startTime, bool cancelled)
     {
         if (cancelled) throw SchedulingException.Conflict("SESSION_CANCELLED", "Không thể điểm danh buổi đã hủy.");
         if (date != DateOnly.FromDateTime(clock.LocalNow)) throw SchedulingException.Conflict("ATTENDANCE_WRONG_DAY", "Chỉ được điểm danh trong ngày diễn ra theo giờ Việt Nam.");
+        if (clock.ToUtc(date, startTime) > clock.UtcNow)
+            throw SchedulingException.Conflict("ATTENDANCE_NOT_STARTED", "Chỉ được chốt điểm danh từ giờ bắt đầu buổi học.");
     }
 
     private static void ValidateEntries(List<AttendanceEntry> entries)

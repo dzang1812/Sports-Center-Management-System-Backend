@@ -84,23 +84,47 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             var entity = await db.Classes.FirstOrDefaultAsync(x => x.Id == id, token)
                 ?? throw SchedulingException.NotFound("CLASS_NOT_FOUND", "Không tìm thấy lớp.");
             var (sport, room) = await ValidateSportRoomAsync(request.SportId, request.RoomId, request.Capacity, token);
-            var bookingMax = await db.ClassBookings.Where(x => x.Session.ClassId == id && x.Status == BookingStatus.Confirmed)
+            var nameChanged = entity.Name != request.Name.Trim();
+            var levelChanged = entity.Level != request.Level;
+            var capacityChanged = entity.Capacity != request.Capacity;
+            var roomChanged = entity.RoomId != request.RoomId;
+            var localNow = clock.LocalNow;
+            var today = DateOnly.FromDateTime(localNow);
+            var timeNow = TimeOnly.FromDateTime(localNow);
+            var bookingMax = await db.ClassBookings.Where(x => x.Session.ClassId == id && x.Status == BookingStatus.Confirmed &&
+                    (x.Session.Date > today || (x.Session.Date == today && x.Session.StartTime > timeNow)))
                 .GroupBy(x => x.SessionId).Select(x => x.Count()).DefaultIfEmpty().MaxAsync(token);
             if (request.Capacity < bookingMax)
                 throw SchedulingException.Conflict("CAPACITY_BELOW_BOOKINGS", "Sức chứa mới nhỏ hơn số booking hiệu lực.");
             var hasSessions = await db.ClassSessions.AnyAsync(x => x.ClassId == id, token);
             if (hasSessions && entity.SportId != request.SportId)
                 throw SchedulingException.Conflict("CLASS_SPORT_IN_USE", "Không thể đổi bộ môn sau khi lớp đã có buổi học.");
-            if (await db.ClassSessions.AnyAsync(x => x.ClassId == id && (x.Date < request.StartDate || x.Date > request.EndDate), token))
-                throw SchedulingException.Conflict("CLASS_DATE_EXCLUDES_SESSION", "Khoảng ngày mới loại bỏ buổi học đã tồn tại.");
-            var localNow = clock.LocalNow;
-            var today = DateOnly.FromDateTime(localNow);
-            var timeNow = TimeOnly.FromDateTime(localNow);
             if (await db.ClassSessions.AnyAsync(x => x.ClassId == id && x.Status == SessionStatus.Scheduled &&
-                (x.Date > today || (x.Date == today && x.StartTime > timeNow)) && x.Room.Capacity < request.Capacity, token))
+                (x.Date > today || (x.Date == today && x.StartTime > timeNow)) &&
+                (x.Date < request.StartDate || x.Date > request.EndDate), token))
+                throw SchedulingException.Conflict("CLASS_DATE_EXCLUDES_SESSION", "Khoảng ngày mới loại bỏ buổi học đã tồn tại.");
+            var futureSessions = await db.ClassSessions.Include(x => x.Room).Where(x => x.ClassId == id && x.Status == SessionStatus.Scheduled &&
+                (x.Date > today || (x.Date == today && x.StartTime > timeNow))).ToListAsync(token);
+            if (capacityChanged && futureSessions.Any(x => roomChanged ? room.Capacity < request.Capacity : x.Room.Capacity < request.Capacity))
                 throw SchedulingException.Conflict("CAPACITY_EXCEEDS_SESSION_ROOM", "Sức chứa mới vượt quá phòng của một buổi tương lai.");
             if (request.CoachId is { } coachId && coachId != entity.CoachId)
                 throw new SchedulingException("USE_ASSIGN_COACH", "Dùng endpoint /api/classes/{id}/coach để đổi huấn luyện viên.");
+            if (roomChanged && entity.CoachId is { } assignedCoachId)
+            {
+                var conflicts = new List<SessionConflict>();
+                foreach (var session in futureSessions)
+                    conflicts.AddRange(await FindResourceConflictsAsync([session.Date], session.StartTime, session.EndTime,
+                        request.RoomId, assignedCoachId, session.Id, token));
+                if (conflicts.Count != 0)
+                    throw SchedulingException.Conflict("CLASS_UPDATE_CONFLICT", "Phòng mới gây xung đột cho lịch tương lai.", conflicts);
+            }
+            foreach (var session in futureSessions)
+            {
+                if (nameChanged) session.ClassName = request.Name.Trim();
+                if (levelChanged) session.Level = request.Level;
+                if (capacityChanged) session.Capacity = request.Capacity;
+                if (roomChanged) session.RoomId = request.RoomId;
+            }
             entity.Name = request.Name.Trim(); entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
             entity.RoomId = room.Id; entity.Capacity = request.Capacity; entity.Level = request.Level;
             entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status;
@@ -144,6 +168,7 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             var sessions = candidates.Select(date => new ClassSession
             {
                 ClassId = classId, CoachId = coachId, RoomId = item.RoomId, Date = date, StartTime = request.StartTime, EndTime = request.EndTime,
+                ClassName = item.Name, Level = item.Level, Capacity = item.Capacity,
                 CreatedAt = clock.UtcNow,
             }).ToList();
             db.ClassSessions.AddRange(sessions);
@@ -173,13 +198,14 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             if (conflicts.Count != 0) throw SchedulingException.Conflict("COACH_SCHEDULE_CONFLICT", "Huấn luyện viên bị trùng lịch.", conflicts);
             var previousCoachId = item.CoachId;
             item.CoachId = request.CoachId;
+            item.NotificationRevision++;
             foreach (var session in sessions) session.CoachId = request.CoachId;
             SchedulingRules.AddAudit(db, actorId, "Class.AssignCoach", nameof(Class), classId, request);
             SchedulingRules.AddNotification(db, request.CoachId, actorId, NotificationType.ScheduleChange, "Được phân công lớp",
-                $"Bạn được phân công lớp {item.Name}.", $"class:{classId}:coach:{previousCoachId ?? 0}:to:{request.CoachId}");
+                $"Bạn được phân công lớp {item.Name}.", $"class:{classId}:coach-revision:{item.NotificationRevision}:assigned:{request.CoachId}");
             if (previousCoachId is { } oldCoachId && oldCoachId != request.CoachId)
                 SchedulingRules.AddNotification(db, oldCoachId, actorId, NotificationType.ScheduleChange, "Thay đổi phân công lớp",
-                    $"Bạn không còn được phân công lớp {item.Name}.", $"class:{classId}:coach:{oldCoachId}:removed:{request.CoachId}");
+                    $"Bạn không còn được phân công lớp {item.Name}.", $"class:{classId}:coach-revision:{item.NotificationRevision}:removed:{oldCoachId}");
             await db.SaveChangesAsync(token);
             return await GetClassAsync(classId, token);
         }, ct);
@@ -195,7 +221,7 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             x.Coach.CoachProfile!.Sports.Any(s => s.Id == x.Class.SportId) && x.Room.Status == RoomStatus.Active && x.Class.Sport.Status == SportStatus.Active);
         if (sportId is { } s) query = query.Where(x => x.Class.SportId == s);
         if (coachId is { } c) query = query.Where(x => x.CoachId == c);
-        if (level is { } l) query = query.Where(x => x.Class.Level == l);
+        if (level is { } l) query = query.Where(x => x.Level == l);
         var total = await query.CountAsync(ct);
         var raw = await query.OrderBy(x => x.Date).ThenBy(x => x.StartTime).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new { Session = x, x.Class, Sport = x.Class.Sport.Name, Room = x.Room.Name, Coach = x.Coach!.FullName,
@@ -213,7 +239,11 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             var original = await db.ClassSessions.AsNoTracking().Where(x => x.Id == sessionId)
                 .Select(x => new { x.ClassId, x.Class.SportId, x.RoomId, x.CoachId }).FirstOrDefaultAsync(token)
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
-            var lockList = new List<ScheduleResourceLock> { new(ScheduleResourceType.Sport, original.SportId), new(ScheduleResourceType.Session, sessionId), new(ScheduleResourceType.Room, original.RoomId), new(ScheduleResourceType.Room, request.RoomId) };
+            await transaction.LockAsync([new(ScheduleResourceType.Sport, original.SportId)], token);
+            original = await db.ClassSessions.AsNoTracking().Where(x => x.Id == sessionId)
+                .Select(x => new { x.ClassId, x.Class.SportId, x.RoomId, x.CoachId }).FirstOrDefaultAsync(token)
+                ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Session was not found.");
+            var lockList = new List<ScheduleResourceLock> { new(ScheduleResourceType.Session, sessionId), new(ScheduleResourceType.Room, original.RoomId), new(ScheduleResourceType.Room, request.RoomId) };
             if (original.CoachId is { } c) lockList.Add(new(ScheduleResourceType.Coach, c));
             var memberIds = await db.ClassBookings.Where(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed).Select(x => x.MemberId).ToListAsync(token);
             lockList.AddRange(memberIds.Select(x => new ScheduleResourceLock(ScheduleResourceType.Member, x)));
@@ -224,7 +254,7 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
                 throw SchedulingException.Conflict("SESSION_NOT_FUTURE", "Không thể sửa buổi đã diễn ra hoặc chuyển lịch về quá khứ.");
             if (request.Date < session.Class.StartDate || request.Date > session.Class.EndDate) throw new SchedulingException("DATE_OUTSIDE_CLASS", "Ngày nằm ngoài khoảng của lớp.");
             var room = await db.Rooms.FindAsync([request.RoomId], token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");
-            if (room.Status != RoomStatus.Active || room.Capacity < session.Class.Capacity) throw SchedulingException.Conflict("ROOM_UNAVAILABLE", "Phòng không hoạt động hoặc không đủ sức chứa.");
+            if (room.Status != RoomStatus.Active || room.Capacity < session.Capacity) throw SchedulingException.Conflict("ROOM_UNAVAILABLE", "Phòng không hoạt động hoặc không đủ sức chứa.");
             if (session.CoachId is not { } coachId) throw SchedulingException.Conflict("COACH_REQUIRED", "Buổi học chưa có huấn luyện viên.");
             await ValidateCoachAsync(coachId, session.Class.SportId, token);
             if (session.Date == request.Date && session.StartTime == request.StartTime && session.EndTime == request.EndTime &&
@@ -238,11 +268,12 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
                  db.Payments.Any(p => p.SubscriptionId == x.SubscriptionId && p.Status == PaymentStatus.Pending)), token);
             if (invalidSubscription) throw SchedulingException.Conflict("SESSION_MOVE_INVALIDATES_SUBSCRIPTION", "Ngày mới làm booking hiện hữu mất quyền gói.");
             session.Date = request.Date; session.StartTime = request.StartTime; session.EndTime = request.EndTime; session.RoomId = request.RoomId; session.Note = request.Note?.Trim();
+            session.NotificationRevision++;
             SchedulingRules.AddAudit(db, actorId, "ClassSession.Update", nameof(ClassSession), sessionId, request);
             foreach (var memberId in memberIds) SchedulingRules.AddNotification(db, memberId, actorId, NotificationType.ScheduleChange,
-                "Lịch lớp đã thay đổi", $"Buổi {session.Class.Name} đã được chuyển sang {request.Date:yyyy-MM-dd} {request.StartTime:HH:mm}.", $"class-session:{sessionId}:updated:{request.Date}:{request.StartTime}:{memberId}");
+                "Lịch lớp đã thay đổi", $"Buổi {session.ClassName} đã được chuyển sang {request.Date:yyyy-MM-dd} {request.StartTime:HH:mm}.", $"class-session:{sessionId}:revision:{session.NotificationRevision}:member:{memberId}");
             SchedulingRules.AddNotification(db, coachId, actorId, NotificationType.ScheduleChange, "Lịch dạy đã thay đổi",
-                $"Buổi {session.Class.Name} đã chuyển sang {request.Date:yyyy-MM-dd} {request.StartTime:HH:mm}.", $"class-session:{sessionId}:updated:{request.Date}:{request.StartTime}:coach:{coachId}");
+                $"Buổi {session.ClassName} đã chuyển sang {request.Date:yyyy-MM-dd} {request.StartTime:HH:mm}.", $"class-session:{sessionId}:revision:{session.NotificationRevision}:coach:{coachId}");
             await db.SaveChangesAsync(token);
             return await GetSessionAsync(sessionId, token);
         }, ct);
@@ -254,12 +285,16 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             await SchedulingRules.EnsureActiveActorAsync(db, actorId, UserRole.Manager, token);
             var snapshot = await db.ClassSessions.AsNoTracking().Where(x => x.Id == sessionId).Select(x => new
             {
+                x.Class.SportId,
                 x.CoachId,
-                MemberIds = db.ClassBookings.Where(b => b.SessionId == sessionId && b.Status == BookingStatus.Confirmed).Select(b => b.MemberId).ToList(),
             }).FirstOrDefaultAsync(token)
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
-            var locks = snapshot.MemberIds.Select(x => new ScheduleResourceLock(ScheduleResourceType.Member, x)).ToList();
-            if (snapshot.CoachId is { } lockedCoachId) locks.Add(new(ScheduleResourceType.Coach, lockedCoachId));
+            await transaction.LockAsync([new(ScheduleResourceType.Sport, snapshot.SportId)], token);
+            var memberIds = await db.ClassBookings.Where(b => b.SessionId == sessionId && b.Status == BookingStatus.Confirmed)
+                .Select(b => b.MemberId).ToListAsync(token);
+            var currentCoachId = await db.ClassSessions.Where(x => x.Id == sessionId).Select(x => x.CoachId).SingleAsync(token);
+            var locks = memberIds.Select(x => new ScheduleResourceLock(ScheduleResourceType.Member, x)).ToList();
+            if (currentCoachId is { } lockedCoachId) locks.Add(new(ScheduleResourceType.Coach, lockedCoachId));
             locks.Add(new(ScheduleResourceType.Session, sessionId));
             await transaction.LockAsync(locks, token);
             var session = await db.ClassSessions.Include(x => x.Class).FirstAsync(x => x.Id == sessionId, token);
@@ -273,10 +308,10 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
             {
                 booking.Status = BookingStatus.Cancelled; booking.CancelledAt = clock.UtcNow; booking.CancelledByUserId = actorId; booking.CancellationReason = request.Reason.Trim();
                 SchedulingRules.AddNotification(db, booking.MemberId, actorId, NotificationType.ScheduleChange, "Buổi học đã hủy",
-                    $"Buổi {session.Class.Name} ngày {session.Date:yyyy-MM-dd} đã hủy: {request.Reason.Trim()}", $"class-session:{sessionId}:cancelled:{booking.MemberId}");
+                    $"Buổi {session.ClassName} ngày {session.Date:yyyy-MM-dd} đã hủy: {request.Reason.Trim()}", $"class-session:{sessionId}:cancelled:{booking.MemberId}");
             }
             if (session.CoachId is { } coachId) SchedulingRules.AddNotification(db, coachId, actorId, NotificationType.ScheduleChange,
-                "Buổi dạy đã hủy", $"Buổi {session.Class.Name} ngày {session.Date:yyyy-MM-dd} đã hủy.", $"class-session:{sessionId}:cancelled:coach:{coachId}");
+                "Buổi dạy đã hủy", $"Buổi {session.ClassName} ngày {session.Date:yyyy-MM-dd} đã hủy.", $"class-session:{sessionId}:cancelled:coach:{coachId}");
             SchedulingRules.AddAudit(db, actorId, "ClassSession.Cancel", nameof(ClassSession), sessionId, new { request.Reason, BookingCount = bookings.Count });
             return 0;
         }, ct);
@@ -349,7 +384,7 @@ public sealed class ClassScheduleService(AppDbContext db, ISchedulingTransaction
     }
 
     private static SessionDto ToSessionDto(ClassSession x, Class c, string sport, string room, string? coach, int booked) =>
-        new(x.Id, c.Id, c.Name, c.SportId, sport, c.Level, x.Date, x.StartTime, x.EndTime, x.RoomId, room, x.CoachId, coach,
-            c.Capacity, Math.Max(0, c.Capacity - booked), x.Status);
+        new(x.Id, c.Id, x.ClassName, c.SportId, sport, x.Level, x.Date, x.StartTime, x.EndTime, x.RoomId, room, x.CoachId, coach,
+            x.Capacity, Math.Max(0, x.Capacity - booked), x.Status);
     private static (int Page, int PageSize) Page(int page, int pageSize) => (Math.Max(1, page), pageSize is 10 or 20 or 50 ? pageSize : 20);
 }

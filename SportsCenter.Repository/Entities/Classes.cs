@@ -36,6 +36,7 @@ public class Class
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public ClassStatus Status { get; set; } = ClassStatus.Draft;
+    public int NotificationRevision { get; set; }
     public List<ClassSession> Sessions { get; set; } = [];
     public List<ClassEnrollment> Enrollments { get; set; } = [];
 }
@@ -49,6 +50,9 @@ public class ClassSession
     public User? Coach { get; set; }
     public int RoomId { get; set; }
     public Room Room { get; set; } = null!;
+    public string ClassName { get; set; } = "";
+    public Level Level { get; set; }
+    public int Capacity { get; set; }
     public DateOnly Date { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
@@ -58,6 +62,10 @@ public class ClassSession
     public DateTime? CancelledAt { get; set; }
     public int? CancelledByUserId { get; set; }
     public User? CancelledByUser { get; set; }
+    public DateTime? AttendanceFinalizedAt { get; set; }
+    public int? AttendanceFinalizedByUserId { get; set; }
+    public User? AttendanceFinalizedByUser { get; set; }
+    public int NotificationRevision { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -78,6 +86,7 @@ public class ClassBooking
     public int? CancelledByUserId { get; set; }
     public User? CancelledByUser { get; set; }
     public string? CancellationReason { get; set; }
+    public bool IsLateCancellation { get; set; }
 }
 
 public class CoachAvailability
@@ -120,6 +129,10 @@ public class PtBooking
     public string? CancellationReason { get; set; }
     public bool CreditRefunded { get; set; }
     public DateTime? CreditRefundedAt { get; set; }
+    public bool IsLateCancellation { get; set; }
+    public DateTime? AttendanceFinalizedAt { get; set; }
+    public int? AttendanceFinalizedByUserId { get; set; }
+    public User? AttendanceFinalizedByUser { get; set; }
 }
 
 public class ClassEnrollment // legacy class-level enrollment retained for compatibility

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SportsCenter.Repository.Data;
 using SportsCenter.Repository.Entities;
 
@@ -6,7 +7,7 @@ namespace SportsCenter.Services.Scheduling;
 
 public record BookForMemberRequest(int? MemberId);
 public record BookingDto(int Id, int SessionId, int MemberId, int PerformedByUserId, int SubscriptionId,
-    BookingStatus Status, DateTime CreatedAt, DateTime? CancelledAt);
+    BookingStatus Status, DateTime CreatedAt, DateTime? CancelledAt, bool IsLateCancellation = false);
 
 public interface IClassBookingService
 {
@@ -14,8 +15,10 @@ public interface IClassBookingService
     Task CancelAsync(int actorId, int bookingId, string? reason, CancellationToken ct);
 }
 
-public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction transaction, IAppClock clock) : IClassBookingService
+public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction transaction, IAppClock clock,
+    IOptions<SchedulingOptions> options) : IClassBookingService
 {
+    private readonly SchedulingOptions settings = options.Value;
     public async Task<BookingDto> BookAsync(int actorId, int sessionId, BookForMemberRequest request, CancellationToken ct)
     {
         var memberId = await ResolveTargetMemberAsync(actorId, request.MemberId, ct);
@@ -25,9 +28,14 @@ public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction 
             {
                 x.Class.SportId, x.RoomId, x.CoachId,
             }).FirstOrDefaultAsync(token) ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
+            await transaction.LockAsync([new(ScheduleResourceType.Sport, resources.SportId)], token);
+            resources = await db.ClassSessions.AsNoTracking().Where(x => x.Id == sessionId).Select(x => new
+            {
+                x.Class.SportId, x.RoomId, x.CoachId,
+            }).FirstOrDefaultAsync(token) ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Session was not found.");
             var locks = new List<ScheduleResourceLock>
             {
-                new(ScheduleResourceType.Sport, resources.SportId), new(ScheduleResourceType.Member, memberId),
+                new(ScheduleResourceType.Member, memberId),
                 new(ScheduleResourceType.Room, resources.RoomId), new(ScheduleResourceType.Session, sessionId),
             };
             if (resources.CoachId is { } coachId) locks.Add(new(ScheduleResourceType.Coach, coachId));
@@ -39,16 +47,16 @@ public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction 
             var eligibleCoach = await db.Users.AnyAsync(x => x.Id == session.CoachId && x.IsActive &&
                 x.CoachProfile!.Sports.Any(s => s.Id == session.Class.SportId), token);
             if (!eligibleCoach) throw SchedulingException.Conflict("COACH_NOT_ELIGIBLE", "Huấn luyện viên không còn đúng chuyên môn.");
-            if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow)
-                throw SchedulingException.Conflict("SESSION_NOT_FUTURE", "Chỉ có thể đặt buổi học trong tương lai.");
+            SchedulingRules.EnsureBookingWindow(clock.ToUtc(session.Date, session.StartTime), clock.UtcNow,
+                settings.ClassBookingOpensDaysBefore, settings.ClassBookingClosesMinutesBefore);
             var duplicate = await db.ClassBookings.AnyAsync(x => x.SessionId == sessionId && x.MemberId == memberId && x.Status == BookingStatus.Confirmed, token);
             if (duplicate) throw SchedulingException.Conflict("BOOKING_EXISTS", "Bạn đã đặt buổi học này.");
             var booked = await db.ClassBookings.CountAsync(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed, token);
-            if (booked >= session.Class.Capacity) throw SchedulingException.Conflict("SESSION_FULL", "Buổi học đã hết chỗ.");
+            if (booked >= session.Capacity) throw SchedulingException.Conflict("SESSION_FULL", "Buổi học đã hết chỗ.");
             if (await HasMemberConflictAsync(memberId, session.Date, session.StartTime, session.EndTime, null, token))
                 throw SchedulingException.Conflict("MEMBER_SCHEDULE_CONFLICT", "Hội viên đã có lịch trùng giờ.");
             var subscription = await db.MemberSubscriptions.Include(x => x.Plan)
-                .Where(x => x.MemberId == memberId).OrderBy(x => x.EndDate)
+                .Where(x => x.MemberId == memberId).OrderBy(x => x.EndDate).ThenBy(x => x.Id)
                 .FirstOrDefaultAsync(x => x.Status == SubscriptionStatus.Active && x.StartDate <= session.Date && session.Date <= x.EndDate &&
                     x.Plan.SportId == session.Class.SportId && x.Plan.IncludesClasses &&
                     !db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending), token)
@@ -63,7 +71,7 @@ public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction 
             SchedulingRules.AddAudit(db, actorId, "ClassBooking.Create", nameof(ClassBooking), booking.Id,
                 new { booking.SessionId, TargetMemberId = memberId, booking.PerformedByUserId, booking.SubscriptionId });
             SchedulingRules.AddNotification(db, memberId, actorId, NotificationType.Booking, "Đặt lớp thành công",
-                $"Booking buổi {session.Class.Name} ngày {session.Date:yyyy-MM-dd} đã được xác nhận.", $"class-booking:{booking.Id}:created");
+                $"Booking buổi {session.ClassName} ngày {session.Date:yyyy-MM-dd} đã được xác nhận.", $"class-booking:{booking.Id}:created");
             await db.SaveChangesAsync(token);
             return ToDto(booking);
         }, ct);
@@ -85,12 +93,19 @@ public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction 
             var booking = await db.ClassBookings.Include(x => x.Session).FirstAsync(x => x.Id == bookingId, token);
             if (booking.Status == BookingStatus.Cancelled) return 0; // idempotent: repeated DELETE is 204
             if (booking.Status == BookingStatus.Completed) throw SchedulingException.Conflict("BOOKING_COMPLETED", "Không thể hủy booking đã hoàn tất.");
-            if (!SchedulingRules.MeetsCancellationCutoff(clock.ToUtc(booking.Session.Date, booking.Session.StartTime), clock.UtcNow))
-                throw SchedulingException.Conflict("CLASS_CANCELLATION_CUTOFF", "Phải hủy lớp trước giờ bắt đầu ít nhất 12 giờ.");
+            var startUtc = clock.ToUtc(booking.Session.Date, booking.Session.StartTime);
+            if (startUtc <= clock.UtcNow || booking.Session.AttendanceFinalizedAt != null ||
+                await db.Attendances.AnyAsync(x => x.SessionId == booking.SessionId && x.MemberId == booking.MemberId &&
+                    (x.Status == AttendanceStatus.Present || x.Status == AttendanceStatus.Late), token))
+                throw SchedulingException.Conflict("CLASS_ALREADY_OCCURRED", "Không thể hủy booking đã bắt đầu, đã hoàn tất hoặc đã ghi nhận tham dự.");
+            var timely = SchedulingRules.MeetsCancellationCutoff(startUtc, clock.UtcNow, settings.ClassCancellationCutoffHours);
+            if (!timely && !settings.AllowLateClassCancellation)
+                throw SchedulingException.Conflict("CLASS_CANCELLATION_CUTOFF", $"Phải hủy lớp trước giờ bắt đầu ít nhất {settings.ClassCancellationCutoffHours} giờ.");
             booking.Status = BookingStatus.Cancelled; booking.CancelledAt = clock.UtcNow; booking.CancelledByUserId = actorId;
             booking.CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+            booking.IsLateCancellation = !timely;
             SchedulingRules.AddAudit(db, actorId, "ClassBooking.Cancel", nameof(ClassBooking), bookingId,
-                new { TargetMemberId = booking.MemberId, PerformedByUserId = actorId, booking.CancellationReason });
+                new { TargetMemberId = booking.MemberId, PerformedByUserId = actorId, booking.CancellationReason, booking.IsLateCancellation });
             return 0;
         }, ct);
     }
@@ -138,5 +153,5 @@ public sealed class ClassBookingService(AppDbContext db, ISchedulingTransaction 
     }
 
     private static BookingDto ToDto(ClassBooking x) => new(x.Id, x.SessionId, x.MemberId, x.PerformedByUserId,
-        x.SubscriptionId, x.Status, x.CreatedAt, x.CancelledAt);
+        x.SubscriptionId, x.Status, x.CreatedAt, x.CancelledAt, x.IsLateCancellation);
 }
