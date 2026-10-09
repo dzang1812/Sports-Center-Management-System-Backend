@@ -85,7 +85,7 @@ public static class DemoSeeder
             .Where(x => x.Role == UserRole.Coach && x.Email.EndsWith("@sportscenter.demo")).ToListAsync();
         foreach (var coach in coaches.Where(x => x.CoachProfile!.Sports.Any(s => s.HasPt)))
         {
-            var sport = coach.CoachProfile!.Sports.Single();
+            var sport = coach.CoachProfile!.Sports.First(s => s.HasPt);
             if (!await db.CoachAvailabilities.AnyAsync(x => x.CoachId == coach.Id && x.IsActive))
                 foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday })
                     db.CoachAvailabilities.Add(new CoachAvailability { CoachId = coach.Id, SportId = sport.Id, DayOfWeek = day, StartTime = new(6, 0), EndTime = new(9, 0) });

@@ -102,7 +102,9 @@ if (app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    await DemoSeeder.SeedAsync(scope.ServiceProvider.GetRequiredService<SportsCenter.Repository.Data.AppDbContext>());
+    var db = scope.ServiceProvider.GetRequiredService<SportsCenter.Repository.Data.AppDbContext>();
+    await db.Database.MigrateAsync();
+    await DemoSeeder.SeedAsync(db);
 }
 
 app.UseHttpsRedirection();
