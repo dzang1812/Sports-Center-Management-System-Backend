@@ -67,6 +67,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasFilter("\"PtBookingId\" IS NOT NULL");
         b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
+        b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
 
         b.Entity<Sport>().ToTable(t => t.HasCheckConstraint(
             "CK_Sport_Capability", "\"HasClasses\" OR \"HasPt\""));
