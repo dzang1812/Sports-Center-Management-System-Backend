@@ -2,7 +2,10 @@ namespace SportsCenter.Repository.Entities;
 
 // Stored as strings in the DB (see AppDbContext.ConfigureConventions).
 public enum UserRole { Manager, Coach, Member, Receptionist }
+public enum TokenPurpose { VerifyEmail, ResetPassword }
 public enum Level { Beginner, Intermediate, Advanced }
+public enum TrainingGoal { WeightLoss, MuscleGain, Endurance, GeneralHealth }
+public enum Gender { Male, Female, Other }
 public enum ClassStatus { Open, Closed, Cancelled }
 public enum SessionStatus { Scheduled, Completed, Cancelled }
 public enum EnrollmentStatus { Enrolled, Cancelled }
