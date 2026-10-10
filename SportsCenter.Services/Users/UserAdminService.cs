@@ -1,9 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
-using SportsCenter.Repository.Data;
 using SportsCenter.Repository.Entities;
+using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Auth;
 
 namespace SportsCenter.Services.Users;
@@ -35,27 +34,16 @@ public interface IUserAdminService
     Task SetStatusAsync(int actorId, int id, bool isActive);
 }
 
-public class UserAdminService(AppDbContext db) : IUserAdminService
+public class UserAdminService(IUserRepository users, IUserAdminRepository admin, IAuditLogRepository audit) : IUserAdminService
 {
     public async Task<PagedResult<UserListItem>> ListAsync(UserRole? role, UserStatus? status, string? q, int page, int pageSize)
     {
         pageSize = pageSize is 10 or 20 or 50 ? pageSize : 10;
         page = Math.Max(page, 1);
 
-        var query = db.Users.AsNoTracking().AsQueryable();
-        if (role is { } r) query = query.Where(u => u.Role == r);
-        if (status is { } s) query = query.Where(u => u.IsActive == (s == UserStatus.Active));
-        if (!string.IsNullOrWhiteSpace(q))
-        {
-            var term = q.Trim().ToLower();
-            query = query.Where(u => u.FullName.ToLower().Contains(term) || u.Email.Contains(term) || (u.Phone != null && u.Phone.Contains(term)));
-        }
+        var (items, total) = await admin.SearchAsync(role, status is { } st ? st == UserStatus.Active : null, q, page, pageSize);
 
-        var total = await query.CountAsync();
-        var users = await query.OrderBy(u => u.Id).Skip((page - 1) * pageSize).Take(pageSize)
-            .Include(u => u.CoachProfile!.Sports).ToListAsync();
-
-        return new PagedResult<UserListItem>(users.Select(ToItem).ToList(), total, page, pageSize);
+        return new PagedResult<UserListItem>(items.Select(ToItem).ToList(), total, page, pageSize);
     }
 
     public async Task<CreatedUserResponse> CreateAsync(int actorId, CreateUserRequest r)
@@ -64,7 +52,7 @@ public class UserAdminService(AppDbContext db) : IUserAdminService
             throw new AuthException("Chỉ tạo được tài khoản Huấn luyện viên hoặc Lễ tân");
 
         var email = r.Email.Trim().ToLowerInvariant();
-        if (await db.Users.AnyAsync(u => u.Email == email))
+        if (await users.EmailExistsAsync(email))
             throw new AuthException("Email đã tồn tại");
 
         var tempPassword = "Sc1-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(4));
@@ -80,17 +68,17 @@ public class UserAdminService(AppDbContext db) : IUserAdminService
         if (r.Role == UserRole.Coach)
             user.CoachProfile = new CoachProfile { Sports = await FindSports(r.Specialties) };
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync(); // need the id for the audit row
+        await users.AddAsync(user);
+        await users.SaveChangesAsync(); // need the id for the audit row
         Audit(actorId, "User.Create", user.Id, new { user.Email, Role = user.Role.ToString() });
-        await db.SaveChangesAsync();
+        await users.SaveChangesAsync();
 
         return new CreatedUserResponse(ToItem(user), tempPassword);
     }
 
     public async Task<UserListItem> UpdateAsync(int actorId, int id, UpdateUserRequest r)
     {
-        var user = await db.Users.Include(u => u.CoachProfile!.Sports).FirstOrDefaultAsync(u => u.Id == id)
+        var user = await admin.GetByIdWithCoachAsync(id)
                    ?? throw new AuthException("Tài khoản không tồn tại");
         if (user.Role is not (UserRole.Coach or UserRole.Receptionist))
             throw new AuthException("Chỉ sửa được tài khoản Huấn luyện viên hoặc Lễ tân");
@@ -104,7 +92,7 @@ public class UserAdminService(AppDbContext db) : IUserAdminService
         }
 
         Audit(actorId, "User.Update", id, new { user.FullName, user.Phone, r.Specialties });
-        await db.SaveChangesAsync();
+        await users.SaveChangesAsync();
         return ToItem(user);
     }
 
@@ -112,23 +100,23 @@ public class UserAdminService(AppDbContext db) : IUserAdminService
     {
         if (id == actorId && !isActive) throw new AuthException("Không thể khoá chính mình");
 
-        var user = await db.Users.FindAsync(id) ?? throw new AuthException("Tài khoản không tồn tại");
+        var user = await admin.GetByIdIncludingLockedAsync(id) ?? throw new AuthException("Tài khoản không tồn tại");
         user.IsActive = isActive;
         Audit(actorId, isActive ? "User.Unlock" : "User.Lock", id, new { user.Email });
-        await db.SaveChangesAsync();
+        await users.SaveChangesAsync();
     }
 
     private async Task<List<Sport>> FindSports(string[]? names)
     {
         names = (names ?? []).Distinct().ToArray();
-        var sports = await db.Sports.Where(s => names.Contains(s.Name)).ToListAsync();
+        var sports = await admin.GetSportsByNamesAsync(names);
         if (sports.Count != names.Length)
             throw new AuthException("Chuyên môn không hợp lệ: " + string.Join(", ", names.Except(sports.Select(s => s.Name))));
         return sports;
     }
 
     private void Audit(int actorId, string action, int userId, object details) =>
-        db.AuditLogs.Add(new AuditLog
+        audit.Add(new AuditLog
         {
             UserId = actorId,
             Action = action,
