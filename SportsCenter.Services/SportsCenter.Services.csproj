@@ -4,8 +4,6 @@
     <ProjectReference Include="..\SportsCenter.Repository\SportsCenter.Repository.csproj" />
   </ItemGroup>
 
-<<<<<<< Updated upstream
-=======
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="8.*" />
@@ -13,7 +11,6 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
   </ItemGroup>
 
->>>>>>> Stashed changes
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

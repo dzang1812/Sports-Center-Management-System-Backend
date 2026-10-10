@@ -9,6 +9,10 @@ public class MembershipPlan
     public int DurationDays { get; set; }
     public decimal Price { get; set; } // "học phí"
     public bool IsActive { get; set; } = true;
+    public int? SportId { get; set; }
+    public Sport? Sport { get; set; }
+    public bool IncludesClasses { get; set; }
+    public int PtSessionCredits { get; set; }
 }
 
 public class MemberSubscription
@@ -21,6 +25,7 @@ public class MemberSubscription
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; } // renewal = new row starting after the previous EndDate
     public SubscriptionStatus Status { get; set; } = SubscriptionStatus.Active;
+    public int RemainingPtSessions { get; set; }
 }
 
 // All payments go through PayOS (bank transfer / VietQR), Member self-service or Receptionist-assisted.
