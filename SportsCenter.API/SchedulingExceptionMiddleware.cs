@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.API;
@@ -12,6 +13,11 @@ public sealed class SchedulingExceptionMiddleware(RequestDelegate next, ILogger<
         {
             context.Response.StatusCode = ex.StatusCode;
             await context.Response.WriteAsJsonAsync(new { errorCode = ex.ErrorCode, message = ex.Message, details = ex.Details });
+        }
+        catch (ScheduleConflictException ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new { errorCode = "SCHEDULE_CONFLICT", message = ex.Message, details = (object?)null });
         }
         catch (DbUpdateException ex)
         {

@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.EntityFrameworkCore;
-using SportsCenter.Repository.Data;
 using SportsCenter.Repository.Entities;
+using SportsCenter.Repository.Repositories;
 
 namespace SportsCenter.Services.Scheduling;
 
@@ -26,24 +25,24 @@ public interface ICatalogService
     Task<RoomDto> UpdateRoomAsync(int actorId, int id, UpsertRoomRequest request, CancellationToken ct);
 }
 
-public sealed class CatalogService(AppDbContext db, ISchedulingTransaction transaction) : ICatalogService
+public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepository users, IAuditLogRepository audit,
+    ISchedulingTransaction transaction) : ICatalogService
 {
-    public Task<List<SportDto>> ListSportsAsync(CancellationToken ct) => db.Sports.AsNoTracking().OrderBy(x => x.Name)
-        .Select(x => new SportDto(x.Id, x.Name, x.Description, x.HasClasses, x.HasPt, x.Status)).ToListAsync(ct);
+    public async Task<List<SportDto>> ListSportsAsync(CancellationToken ct) => (await catalog.ListSportsAsync(ct)).Select(ToDto).ToList();
 
     public async Task<SportDto> CreateSportAsync(int actorId, UpsertSportRequest request, CancellationToken ct)
     {
         ValidateCapability(request.HasClasses, request.HasPt);
         return await transaction.ExecuteAsync(async token =>
         {
-            await SchedulingRules.EnsureActiveActorAsync(db, actorId, UserRole.Manager, token);
+            await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
             var name = request.Name.Trim();
-            if (await db.Sports.AnyAsync(x => x.Name.ToLower() == name.ToLower(), token))
+            if (await catalog.SportNameExistsAsync(name, null, token))
                 throw SchedulingException.Conflict("SPORT_NAME_EXISTS", "Tên bộ môn đã tồn tại.");
             var entity = new Sport { Name = name, Description = request.Description?.Trim(), HasClasses = request.HasClasses, HasPt = request.HasPt, Status = request.Status };
-            db.Sports.Add(entity);
-            await db.SaveChangesAsync(token);
-            SchedulingRules.AddAudit(db, actorId, "Sport.Create", nameof(Sport), entity.Id, request);
+            catalog.AddSport(entity);
+            await transaction.SaveChangesAsync(token);
+            audit.AddAudit(actorId, "Sport.Create", nameof(Sport), entity.Id, request);
             return ToDto(entity);
         }, ct);
     }
@@ -53,39 +52,38 @@ public sealed class CatalogService(AppDbContext db, ISchedulingTransaction trans
         ValidateCapability(request.HasClasses, request.HasPt);
         return await transaction.ExecuteAsync(async token =>
         {
-            await SchedulingRules.EnsureActiveActorAsync(db, actorId, UserRole.Manager, token);
+            await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
             await transaction.LockAsync([new(ScheduleResourceType.Sport, id)], token);
-            var entity = await db.Sports.FindAsync([id], token) ?? throw SchedulingException.NotFound("SPORT_NOT_FOUND", "Không tìm thấy bộ môn.");
+            var entity = await catalog.GetSportAsync(id, token) ?? throw SchedulingException.NotFound("SPORT_NOT_FOUND", "Không tìm thấy bộ môn.");
             var name = request.Name.Trim();
-            if (await db.Sports.AnyAsync(x => x.Id != id && x.Name.ToLower() == name.ToLower(), token))
+            if (await catalog.SportNameExistsAsync(name, id, token))
                 throw SchedulingException.Conflict("SPORT_NAME_EXISTS", "Tên bộ môn đã tồn tại.");
-            if (!request.HasClasses && await db.Classes.AnyAsync(x => x.SportId == id && x.Status != ClassStatus.Cancelled, token))
+            if (!request.HasClasses && await catalog.SportHasOpenClassesAsync(id, token))
                 throw SchedulingException.Conflict("SPORT_HAS_CLASSES", "Không thể bỏ quyền lớp học khi bộ môn còn lớp được tham chiếu.");
-            if (!request.HasPt && await db.PtBookings.AnyAsync(x => x.SportId == id && x.Status == BookingStatus.Confirmed, token))
+            if (!request.HasPt && await catalog.SportHasConfirmedPtBookingsAsync(id, token))
                 throw SchedulingException.Conflict("SPORT_HAS_PT_BOOKINGS", "Không thể bỏ quyền PT khi bộ môn còn lịch PT hiệu lực.");
             entity.Name = name; entity.Description = request.Description?.Trim(); entity.HasClasses = request.HasClasses;
             entity.HasPt = request.HasPt; entity.Status = request.Status;
-            SchedulingRules.AddAudit(db, actorId, "Sport.Update", nameof(Sport), id, request);
-            await db.SaveChangesAsync(token);
+            audit.AddAudit(actorId, "Sport.Update", nameof(Sport), id, request);
+            await transaction.SaveChangesAsync(token);
             return ToDto(entity);
         }, ct);
     }
 
-    public Task<List<RoomDto>> ListRoomsAsync(CancellationToken ct) => db.Rooms.AsNoTracking().OrderBy(x => x.Name)
-        .Select(x => new RoomDto(x.Id, x.Name, x.Capacity, x.Status)).ToListAsync(ct);
+    public async Task<List<RoomDto>> ListRoomsAsync(CancellationToken ct) => (await catalog.ListRoomsAsync(ct)).Select(ToDto).ToList();
 
     public async Task<RoomDto> CreateRoomAsync(int actorId, UpsertRoomRequest request, CancellationToken ct)
     {
         return await transaction.ExecuteAsync(async token =>
         {
-            await SchedulingRules.EnsureActiveActorAsync(db, actorId, UserRole.Manager, token);
+            await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
             var name = request.Name.Trim();
-            if (await db.Rooms.AnyAsync(x => x.Name.ToLower() == name.ToLower(), token))
+            if (await catalog.RoomNameExistsAsync(name, null, token))
                 throw SchedulingException.Conflict("ROOM_NAME_EXISTS", "Tên phòng đã tồn tại.");
             var entity = new Room { Name = name, Capacity = request.Capacity, Status = request.Status, IsActive = request.Status == RoomStatus.Active };
-            db.Rooms.Add(entity);
-            await db.SaveChangesAsync(token);
-            SchedulingRules.AddAudit(db, actorId, "Room.Create", nameof(Room), entity.Id, request);
+            catalog.AddRoom(entity);
+            await transaction.SaveChangesAsync(token);
+            audit.AddAudit(actorId, "Room.Create", nameof(Room), entity.Id, request);
             return ToDto(entity);
         }, ct);
     }
@@ -94,19 +92,18 @@ public sealed class CatalogService(AppDbContext db, ISchedulingTransaction trans
     {
         return await transaction.ExecuteAsync(async token =>
         {
-            await SchedulingRules.EnsureActiveActorAsync(db, actorId, UserRole.Manager, token);
+            await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
             await transaction.LockAsync([new(ScheduleResourceType.Room, id)], token);
-            var entity = await db.Rooms.FindAsync([id], token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");
+            var entity = await catalog.GetRoomAsync(id, token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");
             var name = request.Name.Trim();
-            if (await db.Rooms.AnyAsync(x => x.Id != id && x.Name.ToLower() == name.ToLower(), token))
+            if (await catalog.RoomNameExistsAsync(name, id, token))
                 throw SchedulingException.Conflict("ROOM_NAME_EXISTS", "Tên phòng đã tồn tại.");
-            if (await db.Classes.AnyAsync(x => x.RoomId == id && x.Capacity > request.Capacity && x.Status != ClassStatus.Cancelled, token) ||
-                await db.ClassSessions.AnyAsync(x => x.RoomId == id && x.Capacity > request.Capacity && x.Status != SessionStatus.Cancelled, token))
+            if (await catalog.RoomCapacityInUseAsync(id, request.Capacity, token))
                 throw SchedulingException.Conflict("ROOM_CAPACITY_IN_USE", "Sức chứa mới nhỏ hơn sức chứa của lớp đang dùng phòng.");
             entity.Name = name; entity.Capacity = request.Capacity; entity.Status = request.Status;
             entity.IsActive = request.Status == RoomStatus.Active;
-            SchedulingRules.AddAudit(db, actorId, "Room.Update", nameof(Room), id, request);
-            await db.SaveChangesAsync(token);
+            audit.AddAudit(actorId, "Room.Update", nameof(Room), id, request);
+            await transaction.SaveChangesAsync(token);
             return ToDto(entity);
         }, ct);
     }

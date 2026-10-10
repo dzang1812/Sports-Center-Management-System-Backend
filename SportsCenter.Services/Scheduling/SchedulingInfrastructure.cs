@@ -1,9 +1,6 @@
-using System.Data;
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using SportsCenter.Repository.Data;
 using SportsCenter.Repository.Entities;
+using SportsCenter.Repository.Repositories;
 
 namespace SportsCenter.Services.Scheduling;
 
@@ -55,50 +52,6 @@ public sealed class VietnamClock : IAppClock
     }
 }
 
-public enum ScheduleResourceType : long { Sport = 1, Member = 2, Coach = 3, Room = 4, Class = 5, Session = 6, PtBooking = 7 }
-public readonly record struct ScheduleResourceLock(ScheduleResourceType Type, int Id)
-{
-    public long Key => (long)Type * 10_000_000_000L + Id;
-}
-
-public interface ISchedulingTransaction
-{
-    Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default);
-    Task LockAsync(IEnumerable<ScheduleResourceLock> locks, CancellationToken cancellationToken = default);
-}
-
-public sealed class SchedulingTransaction(AppDbContext db) : ISchedulingTransaction
-{
-    public async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
-    {
-        // READ COMMITTED deliberately pairs with transaction-scoped advisory locks: statements
-        // waiting on a resource lock must see the commit that released it, not an older snapshot.
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        try
-        {
-            var result = await work(cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return result;
-        }
-        catch (Exception ex) when (IsConcurrency(ex))
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw SchedulingException.Conflict("SCHEDULE_CONFLICT", "Dữ liệu lịch vừa thay đổi. Vui lòng tải lại và thử lại.");
-        }
-    }
-
-    public async Task LockAsync(IEnumerable<ScheduleResourceLock> locks, CancellationToken cancellationToken = default)
-    {
-        foreach (var key in locks.Select(x => x.Key).Distinct().Order())
-            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({key})", cancellationToken);
-    }
-
-    private static bool IsConcurrency(Exception ex) => ex is DbUpdateConcurrencyException ||
-        ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.UniqueViolation } ||
-        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.UniqueViolation };
-}
-
 public static class SchedulingRules
 {
     public static bool MeetsCancellationCutoff(DateTime startUtc, DateTime nowUtc, int cutoffHours) =>
@@ -112,12 +65,6 @@ public static class SchedulingRules
             throw SchedulingException.Conflict("BOOKING_NOT_OPEN", "Chua den thoi gian duoc phep dat lich.");
     }
 
-    public static async Task EnsureActiveActorAsync(AppDbContext db, int actorId, UserRole role, CancellationToken ct)
-    {
-        if (!await db.Users.AnyAsync(x => x.Id == actorId && x.Role == role && x.IsActive, ct))
-            throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
-    }
-
     public static bool Overlaps(DateOnly firstDate, TimeOnly firstStart, TimeOnly firstEnd,
         DateOnly secondDate, TimeOnly secondStart, TimeOnly secondEnd) =>
         firstDate == secondDate && firstStart < secondEnd && secondStart < firstEnd;
@@ -129,9 +76,19 @@ public static class SchedulingRules
         subscription.Plan.SportId == sportId &&
         (!needsClass || subscription.Plan.IncludesClasses) &&
         (!needsPt || subscription.Plan.PtSessionCredits > 0);
+}
 
-    public static void AddAudit(AppDbContext db, int actorId, string action, string entity, int entityId, object details) =>
-        db.AuditLogs.Add(new AuditLog
+// Write helpers over the repositories so services never touch the DbContext.
+public static class SchedulingRecords
+{
+    public static async Task EnsureActiveActorAsync(this IScheduleUserRepository users, int actorId, UserRole role, CancellationToken ct)
+    {
+        if (!await users.IsActiveInRoleAsync(actorId, role, ct))
+            throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
+    }
+
+    public static void AddAudit(this IAuditLogRepository audit, int actorId, string action, string entity, int entityId, object details) =>
+        audit.Add(new AuditLog
         {
             UserId = actorId,
             Action = action,
@@ -141,8 +98,8 @@ public static class SchedulingRules
             CreatedAt = DateTime.UtcNow,
         });
 
-    public static void AddNotification(AppDbContext db, int userId, int? senderId, NotificationType type,
-        string title, string body, string deduplicationKey) => db.Notifications.Add(new Notification
+    public static void AddNotification(this INotificationRepository notifications, int userId, int? senderId, NotificationType type,
+        string title, string body, string deduplicationKey) => notifications.Add(new Notification
         {
             UserId = userId,
             SenderId = senderId,
