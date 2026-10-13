@@ -152,9 +152,16 @@ public class CheckIn
     public int Id { get; set; }
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;
+    public int? SubscriptionId { get; set; }
+    public MemberSubscription? Subscription { get; set; }
     public int CheckedInById { get; set; }
     public User CheckedInBy { get; set; } = null!;
     public DateTime CheckedInAt { get; set; } = DateTime.UtcNow;
+    public string CheckInSource { get; set; } = "ReceptionDesk";
+    public int? CheckedOutById { get; set; }
+    public User? CheckedOutBy { get; set; }
+    public DateTime? CheckedOutAt { get; set; }
+    public string? CheckOutSource { get; set; }
 }
 
 // Exactly one target is set: ClassSession or PtBooking.

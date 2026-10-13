@@ -25,6 +25,7 @@ public class MemberProfile
 {
     public int UserId { get; set; } // PK + FK
     public User User { get; set; } = null!;
+    public string? GymCardCode { get; set; }
     public string? Address { get; set; }
     public string? EmergencyContact { get; set; }
     public decimal? HeightCm { get; set; }

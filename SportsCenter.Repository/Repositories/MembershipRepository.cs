@@ -43,6 +43,14 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
     public Task<Payment?> GetPaymentByOrderCodeAsync(long orderCode, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription).FirstOrDefaultAsync(x => x.PayOsOrderCode == orderCode, ct);
 
+    public Task<PaymentKey?> GetPaymentKeyAsync(int id, CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.Id == id)
+            .Select(x => new PaymentKey(x.MemberId)).FirstOrDefaultAsync(ct);
+
+    public Task<PaymentKey?> GetPaymentKeyByOrderCodeAsync(long orderCode, CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.PayOsOrderCode == orderCode)
+            .Select(x => new PaymentKey(x.MemberId)).FirstOrDefaultAsync(ct);
+
     public Task AddAuditAsync(int actorId, string action, string entityName, int entityId, object details, CancellationToken ct)
     {
         db.AuditLogs.Add(new AuditLog
