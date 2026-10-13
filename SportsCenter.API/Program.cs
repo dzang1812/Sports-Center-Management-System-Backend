@@ -12,6 +12,8 @@ using SportsCenter.Services.Email;
 using SportsCenter.Services.Profile;
 using SportsCenter.Services.Users;
 using SportsCenter.Services.Scheduling;
+using SportsCenter.Services.Membership;
+using SportsCenter.Services.Payments;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,6 +82,19 @@ builder.Services.AddScoped<IClassBookingService, ClassBookingService>();
 builder.Services.AddScoped<IPtService, PtService>();
 builder.Services.AddScoped<IScheduleAttendanceService, ScheduleAttendanceService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+
+builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(o.ClientId) || string.IsNullOrWhiteSpace(o.ApiKey) || string.IsNullOrWhiteSpace(o.ChecksumKey))
+        throw new InvalidOperationException("Missing PayOs:ClientId/ApiKey/ChecksumKey. Set them via dotnet user-secrets.");
+    return new PayOS.PayOSClient(o.ClientId, o.ApiKey, o.ChecksumKey, null);
+});
+builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
+builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
