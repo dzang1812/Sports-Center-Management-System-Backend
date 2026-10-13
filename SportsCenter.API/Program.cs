@@ -71,6 +71,7 @@ builder.Services.AddSingleton<IAppClock, VietnamClock>();
 builder.Services.AddScoped<ISchedulingTransaction, SchedulingTransaction>();
 builder.Services.AddScoped<IScheduleUserRepository, ScheduleUserRepository>();
 builder.Services.AddScoped<IScheduleConflictRepository, ScheduleConflictRepository>();
+builder.Services.AddScoped<ISchedulingSubscriptionRepository, SchedulingSubscriptionRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
 builder.Services.AddScoped<IClassRepository, ClassRepository>();

@@ -35,14 +35,12 @@ public interface IClassRepository
     Task<ClassSession> GetSessionWithClassCoachAndRoomAsync(int id, CancellationToken ct);
     Task<ClassSession> GetSessionWithClassAsync(int id, CancellationToken ct);
     Task<int?> GetSessionCoachIdAsync(int sessionId, CancellationToken ct);
-    Task<bool> HasInvalidSubscriptionAfterMoveAsync(int sessionId, DateOnly newDate, int sportId, CancellationToken ct);
     Task<List<ClassBooking>> GetConfirmedBookingsAsync(int sessionId, CancellationToken ct);
     Task<ClassSession?> GetSessionForBookingAsync(int sessionId, CancellationToken ct);
 
     // class bookings
     Task<bool> HasConfirmedBookingAsync(int sessionId, int memberId, CancellationToken ct);
     Task<int> CountConfirmedBookingsAsync(int sessionId, CancellationToken ct);
-    Task<MemberSubscription?> FindClassSubscriptionAsync(int memberId, DateOnly date, int sportId, CancellationToken ct);
     void AddBooking(ClassBooking booking);
     Task<BookingKey?> GetBookingKeyAsync(int bookingId, CancellationToken ct);
     Task<ClassBooking> GetBookingWithSessionAsync(int bookingId, CancellationToken ct);
@@ -131,12 +129,6 @@ public class ClassRepository(AppDbContext db) : IClassRepository
     public Task<int?> GetSessionCoachIdAsync(int sessionId, CancellationToken ct) =>
         db.ClassSessions.Where(x => x.Id == sessionId).Select(x => x.CoachId).SingleAsync(ct);
 
-    public Task<bool> HasInvalidSubscriptionAfterMoveAsync(int sessionId, DateOnly newDate, int sportId, CancellationToken ct) =>
-        db.ClassBookings.AnyAsync(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed &&
-            (x.Subscription.Status != SubscriptionStatus.Active || x.Subscription.StartDate > newDate || x.Subscription.EndDate < newDate ||
-             x.Subscription.Plan.SportId != sportId || !x.Subscription.Plan.IncludesClasses ||
-             db.Payments.Any(p => p.SubscriptionId == x.SubscriptionId && p.Status == PaymentStatus.Pending)), ct);
-
     public Task<List<ClassBooking>> GetConfirmedBookingsAsync(int sessionId, CancellationToken ct) =>
         db.ClassBookings.Where(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed).ToListAsync(ct);
 
@@ -149,13 +141,6 @@ public class ClassRepository(AppDbContext db) : IClassRepository
 
     public Task<int> CountConfirmedBookingsAsync(int sessionId, CancellationToken ct) =>
         db.ClassBookings.CountAsync(x => x.SessionId == sessionId && x.Status == BookingStatus.Confirmed, ct);
-
-    public Task<MemberSubscription?> FindClassSubscriptionAsync(int memberId, DateOnly date, int sportId, CancellationToken ct) =>
-        db.MemberSubscriptions.Include(x => x.Plan)
-            .Where(x => x.MemberId == memberId).OrderBy(x => x.EndDate).ThenBy(x => x.Id)
-            .FirstOrDefaultAsync(x => x.Status == SubscriptionStatus.Active && x.StartDate <= date && date <= x.EndDate &&
-                x.Plan.SportId == sportId && x.Plan.IncludesClasses &&
-                !db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending), ct);
 
     public void AddBooking(ClassBooking booking) => db.ClassBookings.Add(booking);
 

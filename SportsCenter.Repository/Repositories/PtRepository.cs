@@ -23,9 +23,6 @@ public interface IPtRepository
     Task<PtBooking> GetBookingAsync(int bookingId, CancellationToken ct);
     void AddBooking(PtBooking booking);
 
-    Task<int?> FindPtSubscriptionIdAsync(int memberId, int sportId, DateOnly date, CancellationToken ct);
-    Task<int> ConsumeCreditAsync(int subscriptionId, CancellationToken ct);
-    Task RefundCreditAsync(int subscriptionId, CancellationToken ct);
 }
 
 public class PtRepository(AppDbContext db) : IPtRepository
@@ -63,18 +60,4 @@ public class PtRepository(AppDbContext db) : IPtRepository
 
     public void AddBooking(PtBooking booking) => db.PtBookings.Add(booking);
 
-    public Task<int?> FindPtSubscriptionIdAsync(int memberId, int sportId, DateOnly date, CancellationToken ct) =>
-        db.MemberSubscriptions.AsNoTracking().Where(x => x.MemberId == memberId && x.Status == SubscriptionStatus.Active &&
-                x.StartDate <= date && date <= x.EndDate && x.RemainingPtSessions > 0 && x.Plan.SportId == sportId && x.Plan.PtSessionCredits > 0 &&
-                !db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending))
-            .OrderBy(x => x.EndDate).ThenBy(x => x.Id).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
-
-    // Atomic decrement; returns the number of rows changed (0 when another request used the last credit).
-    public Task<int> ConsumeCreditAsync(int subscriptionId, CancellationToken ct) =>
-        db.MemberSubscriptions.Where(x => x.Id == subscriptionId && x.RemainingPtSessions > 0)
-            .ExecuteUpdateAsync(x => x.SetProperty(s => s.RemainingPtSessions, s => s.RemainingPtSessions - 1), ct);
-
-    public Task RefundCreditAsync(int subscriptionId, CancellationToken ct) =>
-        db.MemberSubscriptions.Where(x => x.Id == subscriptionId)
-            .ExecuteUpdateAsync(x => x.SetProperty(s => s.RemainingPtSessions, s => s.RemainingPtSessions + 1), ct);
 }

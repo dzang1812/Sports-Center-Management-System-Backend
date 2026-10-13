@@ -36,7 +36,7 @@ public interface IClassScheduleService
 }
 
 public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepository catalog, IScheduleConflictRepository scheduleConflicts,
-    IScheduleUserRepository users, IAuditLogRepository audit, INotificationRepository notifications,
+    IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock) : IClassScheduleService
 {
     public async Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct)
@@ -240,7 +240,9 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var conflicts = await FindResourceConflictsAsync([request.Date], request.StartTime, request.EndTime, request.RoomId, coachId, sessionId, token);
             conflicts.AddRange(await FindMemberConflictsAsync(memberIds, request.Date, request.StartTime, request.EndTime, sessionId, null, token));
             if (conflicts.Count != 0) throw SchedulingException.Conflict("SESSION_MOVE_CONFLICT", "Lịch mới gây xung đột.", conflicts);
-            var invalidSubscription = await classes.HasInvalidSubscriptionAfterMoveAsync(sessionId, request.Date, session.Class.SportId, token);
+            var bookingSubscriptions = await subscriptions.ListForConfirmedClassBookingsAsync(sessionId, token);
+            var invalidSubscription = bookingSubscriptions.Any(x =>
+                !SchedulingRules.SubscriptionCovers(x, session.Class.SportId, request.Date, needsClass: true));
             if (invalidSubscription) throw SchedulingException.Conflict("SESSION_MOVE_INVALIDATES_SUBSCRIPTION", "Ngày mới làm booking hiện hữu mất quyền gói.");
             session.Date = request.Date; session.StartTime = request.StartTime; session.EndTime = request.EndTime; session.RoomId = request.RoomId; session.Note = request.Note?.Trim();
             session.NotificationRevision++;

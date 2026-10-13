@@ -69,13 +69,14 @@ public static class SchedulingRules
         DateOnly secondDate, TimeOnly secondStart, TimeOnly secondEnd) =>
         firstDate == secondDate && firstStart < secondEnd && secondStart < firstEnd;
 
-    public static bool SubscriptionCovers(MemberSubscription subscription, int sportId, DateOnly activityDate,
+    public static bool SubscriptionCovers(SchedulingSubscriptionSnapshot subscription, int sportId, DateOnly activityDate,
         bool needsClass = false, bool needsPt = false) =>
         subscription.Status == SubscriptionStatus.Active &&
         subscription.StartDate <= activityDate && activityDate <= subscription.EndDate &&
-        subscription.Plan.SportId == sportId &&
-        (!needsClass || subscription.Plan.IncludesClasses) &&
-        (!needsPt || subscription.Plan.PtSessionCredits > 0);
+        subscription.SportId == sportId &&
+        !subscription.HasPendingPayment &&
+        (!needsClass || subscription.IncludesClasses) &&
+        (!needsPt || subscription.PtSessionCredits > 0 && subscription.RemainingPtSessions > 0);
 }
 
 // Write helpers over the repositories so services never touch the DbContext.

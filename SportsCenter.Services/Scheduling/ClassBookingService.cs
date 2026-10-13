@@ -15,7 +15,8 @@ public interface IClassBookingService
 }
 
 public sealed class ClassBookingService(IClassRepository classes, IScheduleConflictRepository conflicts, IScheduleUserRepository users,
-    IAuditLogRepository audit, INotificationRepository notifications, ISchedulingTransaction transaction, IAppClock clock,
+    ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
+    ISchedulingTransaction transaction, IAppClock clock,
     IOptions<SchedulingOptions> options) : IClassBookingService
 {
     private readonly SchedulingOptions settings = options.Value;
@@ -49,7 +50,9 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
             if (booked >= session.Capacity) throw SchedulingException.Conflict("SESSION_FULL", "Buổi học đã hết chỗ.");
             if (await conflicts.HasMemberConflictAsync(memberId, session.Date, session.StartTime, session.EndTime, null, token))
                 throw SchedulingException.Conflict("MEMBER_SCHEDULE_CONFLICT", "Hội viên đã có lịch trùng giờ.");
-            var subscription = await classes.FindClassSubscriptionAsync(memberId, session.Date, session.Class.SportId, token)
+            var subscription = (await subscriptions.ListForMemberAndSportAsync(memberId, session.Class.SportId, token))
+                .Where(x => SchedulingRules.SubscriptionCovers(x, session.Class.SportId, session.Date, needsClass: true))
+                .OrderBy(x => x.EndDate).ThenBy(x => x.Id).FirstOrDefault()
                 ?? throw SchedulingException.Conflict("SUBSCRIPTION_NOT_ELIGIBLE", "Không có gói Active đúng bộ môn và còn hiệu lực vào ngày học.");
             var booking = new ClassBooking
             {

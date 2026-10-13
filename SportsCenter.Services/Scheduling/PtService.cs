@@ -30,7 +30,7 @@ public interface IPtService
 }
 
 public sealed class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
-    IScheduleUserRepository users, IAuditLogRepository audit, INotificationRepository notifications,
+    IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock, IOptions<SchedulingOptions> options) : IPtService
 {
     private readonly SchedulingOptions settings = options.Value;
@@ -213,20 +213,22 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
             if (await scheduleConflicts.IsRoomBusyAsync(id, date, start, end, ignoredPtId, ct))
                 throw SchedulingException.Conflict("ROOM_SCHEDULE_CONFLICT", "Phòng đã có lịch trùng giờ.");
         }
-        var subscriptionId = await pt.FindPtSubscriptionIdAsync(memberId, sportId, date, ct);
+        var subscriptionId = (await subscriptions.ListForMemberAndSportAsync(memberId, sportId, ct))
+            .Where(x => SchedulingRules.SubscriptionCovers(x, sportId, date, needsPt: true))
+            .OrderBy(x => x.EndDate).ThenBy(x => x.Id).Select(x => (int?)x.Id).FirstOrDefault();
         return subscriptionId ?? throw SchedulingException.Conflict("PT_CREDIT_NOT_ELIGIBLE", "Không có gói PT Active đúng bộ môn, còn hạn và còn buổi.");
     }
 
     private async Task ConsumeCreditAsync(int subscriptionId, CancellationToken ct)
     {
-        var changed = await pt.ConsumeCreditAsync(subscriptionId, ct);
+        var changed = await subscriptions.TryConsumePtCreditAsync(subscriptionId, ct);
         if (changed != 1) throw SchedulingException.Conflict("PT_CREDIT_EXHAUSTED", "Số buổi PT vừa được sử dụng bởi yêu cầu khác.");
     }
 
     private async Task RefundOnceAsync(PtBooking booking, CancellationToken ct)
     {
         if (booking.CreditRefunded) return;
-        await pt.RefundCreditAsync(booking.SubscriptionId, ct);
+        await subscriptions.RefundPtCreditAsync(booking.SubscriptionId, ct);
         booking.CreditRefunded = true; booking.CreditRefundedAt = clock.UtcNow;
     }
 
