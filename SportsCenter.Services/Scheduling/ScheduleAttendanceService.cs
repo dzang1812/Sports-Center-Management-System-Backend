@@ -1,4 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
 
@@ -8,13 +12,19 @@ public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, 
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach, BookingStatus Status);
 public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, AttendanceStatus Status);
 public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions, int AttendedSessions, decimal AttendanceRate,
-    List<AttendanceHistoryItem> Items, string Formula);
+    List<AttendanceHistoryItem> Items, string Formula, bool HasData = true);
 public record CoachScheduleItem(string Type, int ReferenceId, string Title, string Sport, DateOnly Date, TimeOnly StartTime,
-    TimeOnly EndTime, int? RoomId, string? Room, int ParticipantCount, SessionStatus Status);
+    TimeOnly EndTime, int? RoomId, string? Room, int ParticipantCount, SessionStatus Status,
+    AttendanceStatus? CoachAttendanceStatus = null, DateTime? CoachCheckedInAt = null);
 public record RosterItem(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus Status,
-    bool AttendanceRecorded = false, bool AttendanceFinalized = false);
+    bool AttendanceRecorded = false, bool AttendanceFinalized = false, string CheckInState = "NotCheckedIn",
+    DateTime? CheckedInAt = null, AttendanceSource? Source = null);
 public record AttendanceEntry(int MemberId, AttendanceStatus Status = AttendanceStatus.Absent);
 public record BulkAttendanceRequest([param: Required, MinLength(1)] List<AttendanceEntry> Items);
+public record ClassCheckInRequest([param: Required, StringLength(64, MinimumLength = 6)] string Code);
+public record ClassCheckInCodeDto(int SessionId, string Code, DateTime ExpiresAt, string QrPayload);
+public record ClassSelfCheckInResult(string ActorType, int SessionId, int UserId, AttendanceStatus Status,
+    DateTime CheckedInAt, bool AlreadyCheckedIn);
 
 public interface IScheduleAttendanceService
 {
@@ -23,13 +33,18 @@ public interface IScheduleAttendanceService
     Task<List<CoachScheduleItem>> GetCoachScheduleAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<List<RosterItem>> GetClassRosterAsync(int coachId, int sessionId, CancellationToken ct);
     Task<List<RosterItem>> GetPtRosterAsync(int coachId, int bookingId, CancellationToken ct);
+    Task<ClassCheckInCodeDto> IssueClassCheckInCodeAsync(int actorId, int sessionId, CancellationToken ct);
+    Task<ClassSelfCheckInResult> MemberCheckInAsync(int memberId, int sessionId, ClassCheckInRequest request, CancellationToken ct);
+    Task<ClassSelfCheckInResult> CoachCheckInAsync(int coachId, int sessionId, ClassCheckInRequest request, CancellationToken ct);
     Task<List<RosterItem>> MarkClassAttendanceAsync(int coachId, int sessionId, BulkAttendanceRequest request, CancellationToken ct);
     Task<List<RosterItem>> MarkPtAttendanceAsync(int coachId, int bookingId, BulkAttendanceRequest request, CancellationToken ct);
 }
 
-public sealed class ScheduleAttendanceService(IAttendanceRepository attendances, IClassRepository classes, IScheduleUserRepository users,
-    IAuditLogRepository audit, ISchedulingTransaction transaction, IAppClock clock) : IScheduleAttendanceService
+public sealed class ScheduleAttendanceService(IAttendanceRepository attendances, IScheduleUserRepository users,
+    ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, ISchedulingTransaction transaction, IAppClock clock,
+    IOptions<SchedulingOptions> options) : IScheduleAttendanceService
 {
+    private readonly SchedulingOptions settings = options.Value;
     public async Task<List<PersonalScheduleItem>> GetPersonalScheduleAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct)
     {
         ValidateRange(from, to, 180);
@@ -54,13 +69,14 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         var classRows = await attendances.GetFinalizedClassAttendanceAsync(memberId, from, to, today, ct);
         var ptRows = await attendances.GetFinalizedPtAttendanceAsync(memberId, from, to, today, ct);
         var items = classRows.Where(x => clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow)
-            .Select(x => new AttendanceHistoryItem("Class", x.ReferenceId, x.Title, x.Date, x.Status))
+            .Select(x => new AttendanceHistoryItem("Class", x.ReferenceId, x.Title, x.Date, x.Status ?? AttendanceStatus.Absent))
             .Concat(ptRows.Where(x => clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow)
-                .Select(x => new AttendanceHistoryItem("PT", x.ReferenceId, x.Title, x.Date, x.Status))).OrderBy(x => x.Date).ToList();
+                .Select(x => new AttendanceHistoryItem("PT", x.ReferenceId, x.Title, x.Date, x.Status ?? AttendanceStatus.Absent))).OrderBy(x => x.Date).ToList();
         var attended = items.Count(x => x.Status is AttendanceStatus.Present or AttendanceStatus.Late);
         var rate = items.Count == 0 ? 0 : Math.Round(attended * 100m / items.Count, 2);
         return new(year, month, items.Count, attended, rate, items,
-            "(Present + Late) / sessions with finalized attendance; cancelled and future sessions are excluded");
+            "(Present + Late) / eligible sessions that have ended; cancelled bookings/sessions and future sessions are excluded",
+            items.Count > 0);
     }
 
     public async Task<List<CoachScheduleItem>> GetCoachScheduleAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct)
@@ -70,7 +86,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         var classRows = await attendances.GetCoachClassSessionsAsync(coachId, from, to, ct);
         var ptBookings = await attendances.GetCoachPtBookingsAsync(coachId, from, to, ct);
         var classItems = classRows.Select(x => new CoachScheduleItem("Class", x.Session.Id, x.Session.ClassName, x.Sport, x.Session.Date,
-            x.Session.StartTime, x.Session.EndTime, x.Session.RoomId, x.Room, x.Participants, x.Session.Status));
+            x.Session.StartTime, x.Session.EndTime, x.Session.RoomId, x.Room, x.Participants, x.Session.Status,
+            x.CoachAttendanceStatus, x.CoachCheckedInAt));
         var ptItems = ptBookings.Select(x => new CoachScheduleItem("PT", x.Id, "Personal Training", x.Sport.Name, x.Date, x.StartTime, x.EndTime,
             x.RoomId, x.Room == null ? null : x.Room.Name, x.Status == BookingStatus.Confirmed ? 1 : 0,
             x.Status == BookingStatus.Cancelled ? SessionStatus.Cancelled : x.Status == BookingStatus.Completed ? SessionStatus.Completed : SessionStatus.Scheduled));
@@ -89,33 +106,114 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         return await PtRosterAsync(bookingId, ct);
     }
 
-    public async Task<List<RosterItem>> MarkClassAttendanceAsync(int coachId, int sessionId, BulkAttendanceRequest request, CancellationToken ct) =>
+    public async Task<ClassCheckInCodeDto> IssueClassCheckInCodeAsync(int actorId, int sessionId, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
         {
-            await EnsureCoachAsync(coachId, token);
-            ValidateEntries(request.Items);
-            await transaction.LockAsync([new(ScheduleResourceType.Session, sessionId), new(ScheduleResourceType.Coach, coachId)], token);
+            await transaction.LockAsync([new(ScheduleResourceType.Session, sessionId)], token);
+            var actor = await users.GetUserAsync(actorId, token)
+                ?? throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ.");
+            if (!actor.IsActive)
+                throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản đã bị khóa.");
             var session = await attendances.FindSessionWithClassAsync(sessionId, token)
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
-            if (session.CoachId != coachId) throw SchedulingException.Forbidden("SESSION_NOT_OWNED", "Huấn luyện viên chỉ được điểm danh buổi của mình.");
-            ValidateAttendanceDay(session.Date, session.StartTime, session.Status == SessionStatus.Cancelled);
-            var memberIds = request.Items.Select(x => x.MemberId).ToList();
-            var validIds = await classes.GetConfirmedMemberIdsAsync(sessionId, token);
-            if (validIds.Count != memberIds.Count || validIds.Except(memberIds).Any())
-                throw new SchedulingException("ATTENDANCE_INCOMPLETE_ROSTER", "Báo cáo điểm danh phải chứa đúng toàn bộ booking còn hiệu lực.");
-            var existing = await attendances.GetClassAttendancesAsync(sessionId, memberIds, token);
-            foreach (var entry in request.Items)
-            {
-                if (existing.TryGetValue(entry.MemberId, out var attendance))
-                { attendance.Status = entry.Status; attendance.MarkedById = coachId; attendance.MarkedAt = clock.UtcNow; }
-                else attendances.AddAttendance(new Attendance { SessionId = sessionId, MemberId = entry.MemberId, Status = entry.Status, MarkedById = coachId, MarkedAt = clock.UtcNow });
-            }
-            session.AttendanceFinalizedAt = clock.UtcNow;
-            session.AttendanceFinalizedByUserId = coachId;
-            audit.AddAudit(coachId, "Attendance.ClassUpsert", nameof(ClassSession), sessionId, request);
-            await transaction.SaveChangesAsync(token);
-            return await ClassRosterAsync(sessionId, token);
+            if (actor.Role == UserRole.Coach && session.CoachId != actorId)
+                throw SchedulingException.Forbidden("SESSION_NOT_OWNED", "Huấn luyện viên chỉ được mở mã cho buổi mình được phân công.");
+            if (actor.Role is not (UserRole.Coach or UserRole.Receptionist or UserRole.Manager))
+                throw SchedulingException.Forbidden("CHECK_IN_CODE_ISSUER_REQUIRED", "Vai trò không được mở mã check-in lớp.");
+            ValidateCheckInWindow(session);
+
+            var code = GenerateCheckInCode();
+            var endUtc = clock.ToUtc(session.Date, session.EndTime);
+            var expiresAt = new[] { clock.UtcNow.AddMinutes(settings.ClassCheckInCodeLifetimeMinutes), endUtc }.Min();
+            session.CheckInCodeHash = HashCode(code);
+            session.CheckInCodeIssuedAt = clock.UtcNow;
+            session.CheckInCodeExpiresAt = expiresAt;
+            session.CheckInCodeIssuedByUserId = actorId;
+            audit.AddAudit(actorId, "ClassSession.CheckInCodeIssued", nameof(ClassSession), sessionId,
+                new { ExpiresAt = expiresAt });
+            return new ClassCheckInCodeDto(sessionId, code, expiresAt,
+                JsonSerializer.Serialize(new { type = "ClassSessionCheckIn", sessionId, code }));
         }, ct);
+
+    public async Task<ClassSelfCheckInResult> MemberCheckInAsync(
+        int memberId, int sessionId, ClassCheckInRequest request, CancellationToken ct)
+    {
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([
+                new(ScheduleResourceType.Member, memberId), new(ScheduleResourceType.Session, sessionId),
+            ], token);
+            await EnsureMemberAsync(memberId, token);
+            var session = await attendances.FindSessionWithClassAsync(sessionId, token)
+                ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
+            ValidateCheckInWindow(session);
+            ValidateCheckInCode(session, request.Code);
+            var booking = await attendances.FindConfirmedClassBookingAsync(sessionId, memberId, token)
+                ?? throw SchedulingException.Forbidden("CLASS_BOOKING_REQUIRED", "Bạn không có booking hiệu lực cho buổi này.");
+            _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, token))
+                .FirstOrDefault(x => x.Id == booking.SubscriptionId &&
+                    SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date, needsClass: true))
+                ?? throw SchedulingException.Conflict("SUBSCRIPTION_NOT_ELIGIBLE", "Gói dùng đặt lớp không còn hiệu lực cho buổi học.");
+            var existing = await attendances.GetClassAttendanceAsync(sessionId, memberId, token);
+            if (existing is not null)
+                return ToCheckInResult("Member", sessionId, memberId, existing.Status, existing.MarkedAt, true);
+
+            var status = ResolveCheckInStatus(session);
+            var attendance = new Attendance
+            {
+                SessionId = sessionId,
+                MemberId = memberId,
+                Status = status,
+                Source = AttendanceSource.MemberSelfCheckIn,
+                MarkedById = memberId,
+                MarkedAt = clock.UtcNow,
+            };
+            attendances.AddAttendance(attendance);
+            audit.AddAudit(memberId, "Attendance.MemberSelfCheckIn", nameof(ClassSession), sessionId,
+                new { booking.BookingId, booking.SubscriptionId, Status = status });
+            return ToCheckInResult("Member", sessionId, memberId, status, attendance.MarkedAt, false);
+        }, ct);
+    }
+
+    public async Task<ClassSelfCheckInResult> CoachCheckInAsync(
+        int coachId, int sessionId, ClassCheckInRequest request, CancellationToken ct)
+    {
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([
+                new(ScheduleResourceType.Coach, coachId), new(ScheduleResourceType.Session, sessionId),
+            ], token);
+            await EnsureCoachAsync(coachId, token);
+            var session = await attendances.FindSessionWithClassAsync(sessionId, token)
+                ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
+            if (session.CoachId != coachId)
+                throw SchedulingException.Forbidden("SESSION_NOT_OWNED", "Huấn luyện viên chỉ được check-in buổi đang phân công cho mình.");
+            ValidateCheckInWindow(session);
+            ValidateCheckInCode(session, request.Code);
+            var existing = await attendances.GetCoachAttendanceAsync(sessionId, coachId, token);
+            if (existing is not null)
+                return ToCheckInResult("Coach", sessionId, coachId, existing.Status, existing.CheckedInAt, true);
+
+            var status = ResolveCheckInStatus(session);
+            var attendance = new CoachSessionAttendance
+            {
+                SessionId = sessionId,
+                CoachId = coachId,
+                Status = status,
+                CheckedInAt = clock.UtcNow,
+            };
+            attendances.AddCoachAttendance(attendance);
+            audit.AddAudit(coachId, "Attendance.CoachSelfCheckIn", nameof(ClassSession), sessionId,
+                new { Status = status });
+            return ToCheckInResult("Coach", sessionId, coachId, status, attendance.CheckedInAt, false);
+        }, ct);
+    }
+
+    public Task<List<RosterItem>> MarkClassAttendanceAsync(
+        int coachId, int sessionId, BulkAttendanceRequest request, CancellationToken ct) =>
+        Task.FromException<List<RosterItem>>(SchedulingException.Forbidden(
+            "CLASS_ATTENDANCE_SELF_CHECKIN_ONLY",
+            "Hội viên phải tự check-in; huấn luyện viên chỉ được xem roster."));
 
     public async Task<List<RosterItem>> MarkPtAttendanceAsync(int coachId, int bookingId, BulkAttendanceRequest request, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
@@ -141,12 +239,68 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         }, ct);
 
     private async Task<List<RosterItem>> ClassRosterAsync(int sessionId, CancellationToken ct) =>
-        (await attendances.GetClassRosterAsync(sessionId, ct)).Select(ToRosterItem).ToList();
+        (await attendances.GetClassRosterAsync(sessionId, ct)).Select(ToClassRosterItem).ToList();
 
     private async Task<List<RosterItem>> PtRosterAsync(int bookingId, CancellationToken ct) =>
-        (await attendances.GetPtRosterAsync(bookingId, ct)).Select(ToRosterItem).ToList();
+        (await attendances.GetPtRosterAsync(bookingId, ct)).Select(ToPtRosterItem).ToList();
 
-    private static RosterItem ToRosterItem(RosterRow x) => new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status, x.Recorded, x.Finalized);
+    private RosterItem ToClassRosterItem(RosterRow x)
+    {
+        var ended = clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow;
+        var state = x.Status?.ToString() ?? (ended ? AttendanceStatus.Absent.ToString() : "NotCheckedIn");
+        return new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status ?? AttendanceStatus.Absent,
+            x.Status is not null, ended, state, x.CheckedInAt, x.Source);
+    }
+
+    private static RosterItem ToPtRosterItem(RosterRow x)
+    {
+        var state = x.Status?.ToString() ?? (x.LegacyFinalized ? AttendanceStatus.Absent.ToString() : "NotCheckedIn");
+        return new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status ?? AttendanceStatus.Absent,
+            x.Status is not null, x.LegacyFinalized, state, x.CheckedInAt, x.Source);
+    }
+
+    private void ValidateCheckInWindow(ClassSession session)
+    {
+        if (session.Status == SessionStatus.Cancelled)
+            throw SchedulingException.Conflict("SESSION_CANCELLED", "Không thể check-in buổi đã hủy.");
+        if (session.Status != SessionStatus.Scheduled)
+            throw SchedulingException.Conflict("SESSION_NOT_CHECK_IN_ELIGIBLE", "Buổi học không còn mở check-in.");
+        var opensAt = clock.ToUtc(session.Date, session.StartTime).AddMinutes(-settings.ClassCheckInOpensMinutesBefore);
+        var closesAt = clock.ToUtc(session.Date, session.EndTime);
+        if (clock.UtcNow < opensAt)
+            throw SchedulingException.Conflict("CLASS_CHECK_IN_NOT_OPEN", $"Check-in mở trước giờ bắt đầu {settings.ClassCheckInOpensMinutesBefore} phút.");
+        if (clock.UtcNow >= closesAt)
+            throw SchedulingException.Conflict("CLASS_CHECK_IN_CLOSED", "Thời gian check-in của buổi học đã kết thúc.");
+    }
+
+    private void ValidateCheckInCode(ClassSession session, string rawCode)
+    {
+        if (session.CheckInCodeHash is null || session.CheckInCodeExpiresAt is null)
+            throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_REQUIRED", "Buổi học chưa có mã check-in đang hoạt động.");
+        if (session.CheckInCodeExpiresAt <= clock.UtcNow)
+            throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_EXPIRED", "Mã check-in đã hết hạn.");
+        if (!CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(session.CheckInCodeHash), Convert.FromHexString(HashCode(rawCode))))
+            throw new SchedulingException("CLASS_CHECK_IN_CODE_INVALID", "Mã check-in không hợp lệ.");
+    }
+
+    private AttendanceStatus ResolveCheckInStatus(ClassSession session) =>
+        clock.UtcNow <= clock.ToUtc(session.Date, session.StartTime).AddMinutes(settings.ClassPresentGraceMinutes)
+            ? AttendanceStatus.Present
+            : AttendanceStatus.Late;
+
+    private static ClassSelfCheckInResult ToCheckInResult(string actorType, int sessionId, int userId,
+        AttendanceStatus status, DateTime checkedInAt, bool alreadyCheckedIn) =>
+        new(actorType, sessionId, userId, status, checkedInAt, alreadyCheckedIn);
+
+    private static string GenerateCheckInCode()
+    {
+        const string alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+        return string.Concat(Enumerable.Range(0, 8).Select(_ => alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)]));
+    }
+
+    private static string HashCode(string code) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
 
     private async Task OwnsClassSessionAsync(int coachId, int sessionId, CancellationToken ct)
     {

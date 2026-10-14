@@ -16,6 +16,7 @@ public enum SubscriptionStatus { Pending, Active, Expired, Cancelled }
 public enum PaymentMethod { Cash, BankTransfer, Card }
 public enum PaymentStatus { Pending, Paid, Failed, Refunded }
 public enum AttendanceStatus { Present, Absent, Late, Excused }
+public enum AttendanceSource { LegacyCoachMarked, MemberSelfCheckIn }
 public enum NotificationType { General, ScheduleChange, Booking, Homework, SubscriptionExpiry }
 public enum SupportStatus { Open, InProgress, Resolved }
 public enum AiSuggestionStatus { Suggested, Accepted, Rejected }

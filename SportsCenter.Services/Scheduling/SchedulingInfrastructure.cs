@@ -15,6 +15,9 @@ public sealed class SchedulingOptions
     public int ClassBookingClosesMinutesBefore { get; set; }
     public int? PtBookingOpensDaysBefore { get; set; }
     public int PtBookingClosesMinutesBefore { get; set; }
+    public int ClassCheckInOpensMinutesBefore { get; set; } = 15;
+    public int ClassPresentGraceMinutes { get; set; } = 10;
+    public int ClassCheckInCodeLifetimeMinutes { get; set; } = 5;
 }
 
 public sealed class SchedulingException(string errorCode, string message, int statusCode = 400, object? details = null) : Exception(message)

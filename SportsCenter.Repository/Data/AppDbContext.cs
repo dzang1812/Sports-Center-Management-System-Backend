@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PtBooking> PtBookings => Set<PtBooking>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
+    public DbSet<CoachSessionAttendance> CoachSessionAttendances => Set<CoachSessionAttendance>();
     public DbSet<MembershipPlan> MembershipPlans => Set<MembershipPlan>();
     public DbSet<MemberSubscription> MemberSubscriptions => Set<MemberSubscription>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -68,6 +69,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasFilter("\"SessionId\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.PtBookingId, a.MemberId }).IsUnique()
             .HasFilter("\"PtBookingId\" IS NOT NULL");
+        b.Entity<CoachSessionAttendance>().HasIndex(a => new { a.SessionId, a.CoachId }).IsUnique();
+        b.Entity<ClassSession>().Property(x => x.CheckInCodeHash).HasMaxLength(64);
         b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
@@ -103,6 +106,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             "CK_MemberSubscription_RemainingPt", "\"RemainingPtSessions\" >= 0"));
         b.Entity<Attendance>().ToTable(t => t.HasCheckConstraint(
             "CK_Attendance_Target", "(\"SessionId\" IS NULL) <> (\"PtBookingId\" IS NULL)"));
+        b.Entity<CoachSessionAttendance>().ToTable(t => t.HasCheckConstraint(
+            "CK_CoachSessionAttendance_Status", "\"Status\" IN ('Present', 'Late')"));
         b.Entity<CheckIn>().ToTable(t => t.HasCheckConstraint(
             "CK_CheckIn_CheckOutTime", "\"CheckedOutAt\" IS NULL OR \"CheckedOutAt\" >= \"CheckedInAt\""));
 

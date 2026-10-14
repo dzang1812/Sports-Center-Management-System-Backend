@@ -65,6 +65,11 @@ public class ClassSession
     public DateTime? AttendanceFinalizedAt { get; set; }
     public int? AttendanceFinalizedByUserId { get; set; }
     public User? AttendanceFinalizedByUser { get; set; }
+    public string? CheckInCodeHash { get; set; }
+    public DateTime? CheckInCodeIssuedAt { get; set; }
+    public DateTime? CheckInCodeExpiresAt { get; set; }
+    public int? CheckInCodeIssuedByUserId { get; set; }
+    public User? CheckInCodeIssuedByUser { get; set; }
     public int NotificationRevision { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -175,7 +180,19 @@ public class Attendance
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;
     public AttendanceStatus Status { get; set; } = AttendanceStatus.Absent;
+    public AttendanceSource Source { get; set; } = AttendanceSource.LegacyCoachMarked;
     public int MarkedById { get; set; }
     public User MarkedBy { get; set; } = null!;
     public DateTime MarkedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class CoachSessionAttendance
+{
+    public int Id { get; set; }
+    public int SessionId { get; set; }
+    public ClassSession Session { get; set; } = null!;
+    public int CoachId { get; set; }
+    public User Coach { get; set; } = null!;
+    public AttendanceStatus Status { get; set; }
+    public DateTime CheckedInAt { get; set; }
 }

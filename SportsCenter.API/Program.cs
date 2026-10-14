@@ -37,6 +37,8 @@ builder.Services.AddOptions<SchedulingOptions>()
     .Bind(builder.Configuration.GetSection(SchedulingOptions.SectionName))
     .Validate(x => x.ClassCancellationCutoffHours >= 0 && x.PtCancellationCutoffHours >= 0 &&
         x.ClassBookingClosesMinutesBefore >= 0 && x.PtBookingClosesMinutesBefore >= 0 &&
+        x.ClassCheckInOpensMinutesBefore >= 0 && x.ClassPresentGraceMinutes >= 0 &&
+        x.ClassCheckInCodeLifetimeMinutes is >= 1 and <= 30 &&
         x.ClassBookingOpensDaysBefore is null or >= 0 && x.PtBookingOpensDaysBefore is null or >= 0,
         "Scheduling options must be non-negative.")
     .ValidateOnStart();
