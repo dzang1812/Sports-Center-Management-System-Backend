@@ -11,7 +11,7 @@ public sealed class PaymentsController(ISubscriptionService service) : Controlle
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    [HttpGet("{id:int}"), Authorize]
+    [HttpGet("{id:int}"), Authorize(Roles = "Member,Receptionist,Manager")]
     public Task<PaymentDto> Get(int id, CancellationToken ct) => service.GetPaymentAsync(ActorId, id, ct);
 
     [HttpPost("{id:int}/confirm-at-counter"), Authorize(Roles = "Receptionist")]

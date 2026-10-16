@@ -228,7 +228,10 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
     private async Task RefundOnceAsync(PtBooking booking, CancellationToken ct)
     {
         if (booking.CreditRefunded) return;
-        await subscriptions.RefundPtCreditAsync(booking.SubscriptionId, ct);
+        var changed = await subscriptions.TryRefundPtCreditAsync(booking.SubscriptionId, ct);
+        if (changed != 1)
+            throw SchedulingException.Conflict("PT_CREDIT_REFUND_CONFLICT",
+                "Không thể hoàn buổi PT vì số buổi của gói vừa thay đổi.");
         booking.CreditRefunded = true; booking.CreditRefundedAt = clock.UtcNow;
     }
 
