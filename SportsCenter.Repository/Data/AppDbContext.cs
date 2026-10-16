@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PtBooking> PtBookings => Set<PtBooking>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
+    public DbSet<CoachSessionAttendance> CoachSessionAttendances => Set<CoachSessionAttendance>();
     public DbSet<MembershipPlan> MembershipPlans => Set<MembershipPlan>();
     public DbSet<MemberSubscription> MemberSubscriptions => Set<MemberSubscription>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -48,6 +49,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<User>().HasIndex(u => u.Email).IsUnique();
         b.Entity<EmailToken>().HasIndex(t => t.TokenHash).IsUnique();
         b.Entity<MemberProfile>().HasKey(p => p.UserId);
+        b.Entity<MemberProfile>().Property(p => p.GymCardCode).HasMaxLength(64);
+        b.Entity<MemberProfile>().HasIndex(p => p.GymCardCode).IsUnique()
+            .HasFilter("\"GymCardCode\" IS NOT NULL");
         b.Entity<CoachProfile>().HasKey(p => p.UserId);
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
@@ -65,9 +69,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasFilter("\"SessionId\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.PtBookingId, a.MemberId }).IsUnique()
             .HasFilter("\"PtBookingId\" IS NOT NULL");
+        b.Entity<CoachSessionAttendance>().HasIndex(a => new { a.SessionId, a.CoachId }).IsUnique();
+        b.Entity<ClassSession>().Property(x => x.CheckInCodeHash).HasMaxLength(64);
         b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
+        b.Entity<CheckIn>().HasIndex(x => x.MemberId).IsUnique()
+            .HasFilter("\"CheckedOutAt\" IS NULL");
+        b.Entity<CheckIn>().Property(x => x.CheckInSource).HasMaxLength(100);
+        b.Entity<CheckIn>().Property(x => x.CheckOutSource).HasMaxLength(100);
 
         b.Entity<Sport>().ToTable(t => t.HasCheckConstraint(
             "CK_Sport_Capability", "\"HasClasses\" OR \"HasPt\""));
@@ -86,12 +96,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             "CK_CoachAvailability_Times", "\"EndTime\" > \"StartTime\""));
         b.Entity<PtBooking>().ToTable(t => t.HasCheckConstraint(
             "CK_PtBooking_OneHour", "\"EndTime\" = \"StartTime\" + interval '1 hour'"));
-        b.Entity<MembershipPlan>().ToTable(t => t.HasCheckConstraint(
-            "CK_MembershipPlan_PtCredits", "\"PtSessionCredits\" >= 0"));
+        b.Entity<MembershipPlan>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_MembershipPlan_PtCredits", "\"PtSessionCredits\" >= 0");
+            t.HasCheckConstraint("CK_MembershipPlan_Duration",
+                "(\"DurationDays\" > 0 AND \"DurationMonths\" = 0) OR (\"DurationDays\" = 0 AND \"DurationMonths\" > 0)");
+        });
         b.Entity<MemberSubscription>().ToTable(t => t.HasCheckConstraint(
             "CK_MemberSubscription_RemainingPt", "\"RemainingPtSessions\" >= 0"));
         b.Entity<Attendance>().ToTable(t => t.HasCheckConstraint(
             "CK_Attendance_Target", "(\"SessionId\" IS NULL) <> (\"PtBookingId\" IS NULL)"));
+        b.Entity<CoachSessionAttendance>().ToTable(t => t.HasCheckConstraint(
+            "CK_CoachSessionAttendance_Status", "\"Status\" IN ('Present', 'Late')"));
+        b.Entity<CheckIn>().ToTable(t => t.HasCheckConstraint(
+            "CK_CheckIn_CheckOutTime", "\"CheckedOutAt\" IS NULL OR \"CheckedOutAt\" >= \"CheckedInAt\""));
 
         b.Entity<TrainingPlan>().ToTable(t => t.HasCheckConstraint(
             "CK_TrainingPlan_Target", "(\"MemberId\" IS NULL) <> (\"ClassId\" IS NULL)"));

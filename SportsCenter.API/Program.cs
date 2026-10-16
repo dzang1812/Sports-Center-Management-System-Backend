@@ -37,6 +37,8 @@ builder.Services.AddOptions<SchedulingOptions>()
     .Bind(builder.Configuration.GetSection(SchedulingOptions.SectionName))
     .Validate(x => x.ClassCancellationCutoffHours >= 0 && x.PtCancellationCutoffHours >= 0 &&
         x.ClassBookingClosesMinutesBefore >= 0 && x.PtBookingClosesMinutesBefore >= 0 &&
+        x.ClassCheckInOpensMinutesBefore >= 0 && x.ClassPresentGraceMinutes >= 0 &&
+        x.ClassCheckInCodeLifetimeMinutes is >= 1 and <= 30 &&
         x.ClassBookingOpensDaysBefore is null or >= 0 && x.PtBookingOpensDaysBefore is null or >= 0,
         "Scheduling options must be non-negative.")
     .ValidateOnStart();
@@ -71,6 +73,7 @@ builder.Services.AddSingleton<IAppClock, VietnamClock>();
 builder.Services.AddScoped<ISchedulingTransaction, SchedulingTransaction>();
 builder.Services.AddScoped<IScheduleUserRepository, ScheduleUserRepository>();
 builder.Services.AddScoped<IScheduleConflictRepository, ScheduleConflictRepository>();
+builder.Services.AddScoped<ISchedulingSubscriptionRepository, SchedulingSubscriptionRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
 builder.Services.AddScoped<IClassRepository, ClassRepository>();
@@ -92,8 +95,10 @@ builder.Services.AddSingleton(sp =>
     return new PayOS.PayOSClient(o.ClientId, o.ApiKey, o.ChecksumKey, null);
 });
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
+builder.Services.AddScoped<IGymAccessRepository, GymAccessRepository>();
 builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

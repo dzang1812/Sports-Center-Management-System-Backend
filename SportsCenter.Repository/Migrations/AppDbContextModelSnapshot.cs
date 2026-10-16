@@ -132,6 +132,10 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int?>("SessionId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -199,22 +203,49 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CheckInSource")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CheckOutSource")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTime>("CheckedInAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("CheckedInById")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("CheckedOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CheckedOutById")
+                        .HasColumnType("integer");
+
                     b.Property<int>("MemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SubscriptionId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CheckedInById");
 
-                    b.HasIndex("MemberId");
+                    b.HasIndex("CheckedOutById");
 
-                    b.ToTable("CheckIns");
+                    b.HasIndex("MemberId")
+                        .IsUnique()
+                        .HasFilter("\"CheckedOutAt\" IS NULL");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.ToTable("CheckIns", t =>
+                        {
+                            t.HasCheckConstraint("CK_CheckIn_CheckOutTime", "\"CheckedOutAt\" IS NULL OR \"CheckedOutAt\" >= \"CheckedInAt\"");
+                        });
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.Class", b =>
@@ -393,6 +424,19 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int>("Capacity")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("CheckInCodeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CheckInCodeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("CheckInCodeIssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CheckInCodeIssuedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ClassId")
                         .HasColumnType("integer");
 
@@ -437,6 +481,8 @@ namespace SportsCenter.Repository.Migrations
                     b.HasIndex("AttendanceFinalizedByUserId");
 
                     b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("CheckInCodeIssuedByUserId");
 
                     b.HasIndex("CoachId");
 
@@ -511,6 +557,40 @@ namespace SportsCenter.Repository.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("CoachProfiles");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CoachSessionAttendance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CheckedInAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CoachId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CoachId");
+
+                    b.HasIndex("SessionId", "CoachId")
+                        .IsUnique();
+
+                    b.ToTable("CoachSessionAttendances", t =>
+                        {
+                            t.HasCheckConstraint("CK_CoachSessionAttendance_Status", "\"Status\" IN ('Present', 'Late')");
+                        });
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>
@@ -594,6 +674,10 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("Goal")
                         .HasColumnType("text");
 
+                    b.Property<string>("GymCardCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<decimal?>("HeightCm")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -608,6 +692,10 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasKey("UserId");
 
+                    b.HasIndex("GymCardCode")
+                        .IsUnique()
+                        .HasFilter("\"GymCardCode\" IS NOT NULL");
+
                     b.ToTable("MemberProfiles");
                 });
 
@@ -621,6 +709,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IncludesGymAccess")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("MemberId")
                         .HasColumnType("integer");
@@ -664,7 +755,13 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int>("DurationDays")
                         .HasColumnType("integer");
 
+                    b.Property<int>("DurationMonths")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IncludesClasses")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludesGymAccess")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsActive")
@@ -690,6 +787,8 @@ namespace SportsCenter.Repository.Migrations
 
                     b.ToTable("MembershipPlans", t =>
                         {
+                            t.HasCheckConstraint("CK_MembershipPlan_Duration", "(\"DurationDays\" > 0 AND \"DurationMonths\" = 0) OR (\"DurationDays\" = 0 AND \"DurationMonths\" > 0)");
+
                             t.HasCheckConstraint("CK_MembershipPlan_PtCredits", "\"PtSessionCredits\" >= 0");
                         });
                 });
@@ -1339,15 +1438,29 @@ namespace SportsCenter.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.User", "CheckedOutBy")
+                        .WithMany()
+                        .HasForeignKey("CheckedOutById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "Member")
                         .WithMany()
                         .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.MemberSubscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("CheckedInBy");
 
+                    b.Navigation("CheckedOutBy");
+
                     b.Navigation("Member");
+
+                    b.Navigation("Subscription");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.Class", b =>
@@ -1449,6 +1562,11 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("CancelledByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SportsCenter.Repository.Entities.User", "CheckInCodeIssuedByUser")
+                        .WithMany()
+                        .HasForeignKey("CheckInCodeIssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.Class", "Class")
                         .WithMany("Sessions")
                         .HasForeignKey("ClassId")
@@ -1469,6 +1587,8 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("AttendanceFinalizedByUser");
 
                     b.Navigation("CancelledByUser");
+
+                    b.Navigation("CheckInCodeIssuedByUser");
 
                     b.Navigation("Class");
 
@@ -1505,6 +1625,25 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CoachSessionAttendance", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Coach")
+                        .WithMany()
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.ClassSession", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>

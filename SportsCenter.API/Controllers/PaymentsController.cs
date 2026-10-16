@@ -14,6 +14,10 @@ public sealed class PaymentsController(ISubscriptionService service) : Controlle
     [HttpGet("{id:int}"), Authorize]
     public Task<PaymentDto> Get(int id, CancellationToken ct) => service.GetPaymentAsync(ActorId, id, ct);
 
+    [HttpPost("{id:int}/confirm-at-counter"), Authorize(Roles = "Receptionist")]
+    public Task<PaymentDto> ConfirmAtCounter(int id, CancellationToken ct) =>
+        service.ConfirmCounterPaymentAsync(ActorId, id, ct);
+
     // PayOS calls this directly (no JWT); Webhooks.VerifyAsync inside the service checks the signature.
     [HttpPost("payos-webhook"), AllowAnonymous]
     public async Task<IActionResult> PayOsWebhook(Webhook webhook, CancellationToken ct)

@@ -10,10 +10,10 @@ using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.Services.Membership;
 
-public record SubscribeRequest([param: Required] int PlanId, int? MemberId);
+public record SubscribeRequest([param: Required] int PlanId, int? MemberId, PaymentMethod? Method = null);
 
 public record SubscriptionDto(int Id, int MemberId, int PlanId, string PlanName, DateOnly StartDate, DateOnly EndDate,
-    SubscriptionStatus Status, int RemainingPtSessions);
+    SubscriptionStatus Status, int RemainingPtSessions, bool IncludesGymAccess);
 
 // Covers both "pending checkout" (right after Subscribe, or re-fetched later to re-show the QR) and
 // "settled invoice" (once Status = Paid) — one shape, FE branches on Status.
@@ -26,6 +26,7 @@ public interface ISubscriptionService
     Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct);
     Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct);
     Task<PaymentDto> GetPaymentAsync(int actorId, int paymentId, CancellationToken ct);
+    Task<PaymentDto> ConfirmCounterPaymentAsync(int actorId, int paymentId, CancellationToken ct);
     Task HandleWebhookAsync(Webhook webhook, CancellationToken ct);
     Task<string> ConfirmWebhookUrlAsync(int actorId, string webhookUrl, CancellationToken ct);
 }
@@ -35,7 +36,7 @@ public interface ISubscriptionService
 // Harmless (the stale one just never gets paid), add ISchedulingTransaction.LockAsync(Member) if it
 // turns out to confuse members in practice.
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
-    PayOSClient payOs, IOptions<MailOptions> mailOptions) : ISubscriptionService
+    ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions) : ISubscriptionService
 {
     public async Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct)
     {
@@ -44,16 +45,23 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             ?? throw SchedulingException.NotFound("PLAN_NOT_FOUND", "Không tìm thấy gói thành viên.");
         if (!plan.IsActive) throw SchedulingException.Conflict("PLAN_INACTIVE", "Gói thành viên đã ngừng bán.");
 
+        var method = request.Method ?? PaymentMethod.BankTransfer;
+        if (!Enum.IsDefined(method))
+            throw new SchedulingException("PAYMENT_METHOD_INVALID", "Phương thức thanh toán không hợp lệ.");
+        if (method != PaymentMethod.BankTransfer && actor.Role != UserRole.Receptionist)
+            throw SchedulingException.Forbidden("COUNTER_PAYMENT_REQUIRES_RECEPTIONIST", "Chỉ lễ tân được tạo thanh toán tiền mặt hoặc thẻ tại quầy.");
+
         var today = DateOnly.FromDateTime(clock.LocalNow);
         var latest = await repo.GetLatestSubscriptionAsync(memberId, plan.Id, ct);
         var startDate = latest is not null && latest.Status != SubscriptionStatus.Cancelled && latest.EndDate >= today
             ? latest.EndDate.AddDays(1) : today;
-        var endDate = startDate.AddDays(plan.DurationDays - 1);
+        var endDate = CalculateEndDate(startDate, plan);
 
         var subscription = new MemberSubscription
         {
             MemberId = memberId, PlanId = plan.Id, StartDate = startDate, EndDate = endDate,
             Status = SubscriptionStatus.Pending, RemainingPtSessions = plan.PtSessionCredits,
+            IncludesGymAccess = plan.IncludesGymAccess,
         };
         await repo.AddSubscriptionAsync(subscription, ct);
         await repo.SaveChangesAsync(ct); // assigns subscription.Id
@@ -62,22 +70,49 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         {
             MemberId = memberId, SubscriptionId = subscription.Id,
             ReceivedById = actor.Role == UserRole.Receptionist ? actorId : null,
-            Amount = plan.Price,
+            Amount = plan.Price, Method = method,
         };
         await repo.AddPaymentAsync(payment, ct);
         await repo.SaveChangesAsync(ct); // assigns payment.Id, used as the PayOS orderCode
 
         payment.PayOsOrderCode = payment.Id;
-        var link = await CreatePayOsLinkAsync(payment, plan.Name, ct);
-        payment.PayOsPaymentLinkId = link.PaymentLinkId;
-        payment.CheckoutUrl = link.CheckoutUrl;
-        payment.QrCode = link.QrCode;
+        if (method == PaymentMethod.BankTransfer)
+        {
+            var link = await CreatePayOsLinkAsync(payment, plan.Name, ct);
+            payment.PayOsPaymentLinkId = link.PaymentLinkId;
+            payment.CheckoutUrl = link.CheckoutUrl;
+            payment.QrCode = link.QrCode;
+        }
 
         await repo.AddAuditAsync(actorId, "Subscription.Create", nameof(MemberSubscription), subscription.Id,
             new { memberId, planId = plan.Id, subscription.StartDate, subscription.EndDate, payment.Amount }, ct);
         await repo.SaveChangesAsync(ct);
 
         return ToPaymentDto(payment, actor, plan.Name);
+    }
+
+    public async Task<PaymentDto> ConfirmCounterPaymentAsync(int actorId, int paymentId, CancellationToken ct)
+    {
+        await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
+        var key = await repo.GetPaymentKeyAsync(paymentId, ct)
+            ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch thanh toán.");
+
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([new(ScheduleResourceType.Member, key.MemberId)], token);
+            var payment = await repo.GetPaymentWithDetailsAsync(paymentId, token)
+                ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch thanh toán.");
+            if (payment.Method == PaymentMethod.BankTransfer)
+                throw SchedulingException.Conflict("PAYMENT_REQUIRES_GATEWAY", "Thanh toán chuyển khoản chỉ được xác nhận qua PayOS.");
+            if (payment.Status == PaymentStatus.Paid)
+                return ToPaymentDto(payment, payment.Member, payment.Subscription?.Plan.Name);
+            if (payment.Status != PaymentStatus.Pending)
+                throw SchedulingException.Conflict("PAYMENT_NOT_PENDING", "Giao dịch không còn ở trạng thái chờ xác nhận.");
+
+            await ConfirmPaymentAsync(payment, actorId, $"counter:{actorId}", token);
+            await transaction.SaveChangesAsync(token);
+            return ToPaymentDto(payment, payment.Member, payment.Subscription?.Plan.Name);
+        }, ct);
     }
 
     public async Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct)
@@ -107,26 +142,26 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         try { data = await payOs.Webhooks.VerifyAsync(webhook); }
         catch (Exception) { throw new SchedulingException("PAYOS_INVALID_SIGNATURE", "Chữ ký webhook không hợp lệ.", 400); }
 
-        var payment = await repo.GetPaymentByOrderCodeAsync(data.OrderCode, ct);
-        if (payment is null || payment.Status != PaymentStatus.Pending) return;
+        var key = await repo.GetPaymentKeyByOrderCodeAsync(data.OrderCode, ct);
+        if (key is null) return;
 
-        if (webhook.Success)
+        await transaction.ExecuteAsync(async token =>
         {
-            payment.Status = PaymentStatus.Paid;
-            payment.PaidAt = clock.UtcNow;
-            payment.InvoiceNumber = $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
-            if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Active;
-            await repo.AddAuditAsync(payment.MemberId, "Payment.Confirmed", nameof(Payment), payment.Id,
-                new { payment.PayOsOrderCode, data.Reference }, ct);
-        }
-        else
-        {
-            payment.Status = PaymentStatus.Failed;
-            if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Cancelled;
-            await repo.AddAuditAsync(payment.MemberId, "Payment.Failed", nameof(Payment), payment.Id,
-                new { payment.PayOsOrderCode }, ct);
-        }
-        await repo.SaveChangesAsync(ct);
+            await transaction.LockAsync([new(ScheduleResourceType.Member, key.MemberId)], token);
+            var payment = await repo.GetPaymentByOrderCodeAsync(data.OrderCode, token);
+            if (payment is null || payment.Status != PaymentStatus.Pending) return 0;
+
+            if (webhook.Success)
+                await ConfirmPaymentAsync(payment, payment.MemberId, data.Reference, token);
+            else
+            {
+                payment.Status = PaymentStatus.Failed;
+                if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Cancelled;
+                await repo.AddAuditAsync(payment.MemberId, "Payment.Failed", nameof(Payment), payment.Id,
+                    new { payment.PayOsOrderCode }, token);
+            }
+            return 0;
+        }, ct);
     }
 
     public async Task<string> ConfirmWebhookUrlAsync(int actorId, string webhookUrl, CancellationToken ct)
@@ -151,6 +186,21 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         try { return await payOs.PaymentRequests.CreateAsync(request); }
         catch (Exception ex) { throw new SchedulingException("PAYOS_LINK_FAILED", "Không tạo được link thanh toán PayOS. Vui lòng thử lại.", 502, new { ex.Message }); }
     }
+
+    private async Task ConfirmPaymentAsync(Payment payment, int actorId, string reference, CancellationToken ct)
+    {
+        payment.Status = PaymentStatus.Paid;
+        payment.PaidAt = clock.UtcNow;
+        payment.InvoiceNumber = $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
+        if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Active;
+        await repo.AddAuditAsync(actorId, "Payment.Confirmed", nameof(Payment), payment.Id,
+            new { payment.PayOsOrderCode, Reference = reference }, ct);
+    }
+
+    private static DateOnly CalculateEndDate(DateOnly startDate, MembershipPlan plan) =>
+        plan.DurationMonths > 0
+            ? startDate.AddMonths(plan.DurationMonths).AddDays(-1)
+            : startDate.AddDays(plan.DurationDays - 1);
 
     private async Task<(User Actor, int MemberId)> ResolveSubscribeTargetAsync(int actorId, int? requestedMemberId, CancellationToken ct)
     {
@@ -177,7 +227,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
     }
 
     private static SubscriptionDto ToSubscriptionDto(MemberSubscription x, string planName) =>
-        new(x.Id, x.MemberId, x.PlanId, planName, x.StartDate, x.EndDate, x.Status, x.RemainingPtSessions);
+        new(x.Id, x.MemberId, x.PlanId, planName, x.StartDate, x.EndDate, x.Status, x.RemainingPtSessions,
+            x.IncludesGymAccess);
 
     private static PaymentDto ToPaymentDto(Payment x, User member, string? planName) =>
         new(x.Id, x.MemberId, member.FullName, x.SubscriptionId, planName, x.Amount, x.Method, x.Status,
