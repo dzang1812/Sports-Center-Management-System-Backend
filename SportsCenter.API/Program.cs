@@ -1,5 +1,6 @@
 using SportsCenter.API;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -59,6 +60,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+
+// Closed by default (empty array = no cross-origin browser calls allowed). Set real origins per
+// environment: appsettings.Development.json for local FE dev, env var Cors__AllowedOrigins__0 on the
+// deployed server once the FE's production URL is known.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(o => o.AddPolicy("Default", p =>
+    p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserAdminRepository, UserAdminRepository>();
@@ -136,9 +144,18 @@ if (app.Environment.IsDevelopment())
     await DemoSeeder.SeedAsync(db);
 }
 
+// Behind nginx on EC2, Kestrel only ever sees plain HTTP from localhost; without this,
+// UseHttpsRedirection() can't tell the original request was HTTPS and will redirect-loop.
+// No-op in local dev (no proxy in front), so safe to always register.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
 app.UseHttpsRedirection();
 
 app.UseMiddleware<SchedulingExceptionMiddleware>();
+app.UseCors("Default");
 app.UseAuthentication();
 app.UseAuthorization();
 
