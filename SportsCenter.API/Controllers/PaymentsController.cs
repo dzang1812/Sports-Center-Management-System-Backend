@@ -14,6 +14,10 @@ public sealed class PaymentsController(ISubscriptionService service) : Controlle
     [HttpGet("{id:int}"), Authorize(Roles = "Member,Receptionist,Manager")]
     public Task<PaymentDto> Get(int id, CancellationToken ct) => service.GetPaymentAsync(ActorId, id, ct);
 
+    // Cash/Card orders started at the desk, still waiting for the receptionist to confirm cash-in-hand.
+    [HttpGet("pending"), Authorize(Roles = "Receptionist")]
+    public Task<List<PaymentDto>> Pending(CancellationToken ct) => service.ListPendingCounterPaymentsAsync(ActorId, ct);
+
     [HttpPost("{id:int}/confirm-at-counter"), Authorize(Roles = "Receptionist")]
     public Task<PaymentDto> ConfirmAtCounter(int id, CancellationToken ct) =>
         service.ConfirmCounterPaymentAsync(ActorId, id, ct);
