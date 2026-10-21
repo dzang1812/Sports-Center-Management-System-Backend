@@ -14,6 +14,8 @@ using SportsCenter.Services.Users;
 using SportsCenter.Services.Scheduling;
 using SportsCenter.Services.Membership;
 using SportsCenter.Services.Payments;
+using SportsCenter.Services.Media;
+using CloudinaryDotNet;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +102,15 @@ builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
+
+builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<CloudinaryOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(o.CloudName) || string.IsNullOrWhiteSpace(o.ApiKey) || string.IsNullOrWhiteSpace(o.ApiSecret))
+        throw new InvalidOperationException("Missing Cloudinary:CloudName/ApiKey/ApiSecret. Set them via dotnet user-secrets.");
+    return new Cloudinary(new Account(o.CloudName, o.ApiKey, o.ApiSecret));
+});
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

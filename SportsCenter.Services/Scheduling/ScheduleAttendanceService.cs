@@ -8,8 +8,11 @@ using SportsCenter.Repository.Repositories;
 
 namespace SportsCenter.Services.Scheduling;
 
+// AttendanceStatus is null while the session is upcoming or hasn't been checked in/marked yet; once the
+// session has ended, the FE treats a null/Absent value as "missed" and Present/Late as "attended".
 public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, string Title, string Sport,
-    DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach, BookingStatus Status);
+    DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach,
+    BookingStatus Status, AttendanceStatus? AttendanceStatus);
 public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, AttendanceStatus Status);
 public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions, int AttendedSessions, decimal AttendanceRate,
     List<AttendanceHistoryItem> Items, string Formula, bool HasData = true);
@@ -51,11 +54,15 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         await EnsureMemberAsync(memberId, ct);
         var classBookings = await attendances.GetMemberClassBookingsAsync(memberId, from, to, includeCancelled, ct);
         var ptBookings = await attendances.GetMemberPtBookingsAsync(memberId, from, to, includeCancelled, ct);
+        var classAttendance = await attendances.GetClassAttendanceMapAsync(memberId, classBookings.Select(x => x.SessionId).ToList(), ct);
+        var ptAttendance = await attendances.GetPtAttendanceMapAsync(memberId, ptBookings.Select(x => x.Id).ToList(), ct);
         var classItems = classBookings.Select(x => new PersonalScheduleItem("Class", x.Id, x.SessionId, x.Session.ClassName,
             x.Session.Class.Sport.Name, x.Session.Date, x.Session.StartTime, x.Session.EndTime, x.Session.RoomId, x.Session.Room.Name,
-            x.Session.CoachId!.Value, x.Session.Coach!.FullName, x.Status));
+            x.Session.CoachId!.Value, x.Session.Coach!.FullName, x.Status,
+            classAttendance.TryGetValue(x.SessionId, out var cs) ? cs : null));
         var ptItems = ptBookings.Select(x => new PersonalScheduleItem("PT", x.Id, x.Id, "Personal Training", x.Sport.Name,
-            x.Date, x.StartTime, x.EndTime, x.RoomId, x.Room == null ? null : x.Room.Name, x.CoachId, x.Coach.FullName, x.Status));
+            x.Date, x.StartTime, x.EndTime, x.RoomId, x.Room == null ? null : x.Room.Name, x.CoachId, x.Coach.FullName, x.Status,
+            ptAttendance.TryGetValue(x.Id, out var ps) ? ps : null));
         return classItems.Concat(ptItems).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToList();
     }
 
