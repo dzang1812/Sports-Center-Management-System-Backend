@@ -15,7 +15,8 @@ public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, 
     BookingStatus Status, AttendanceStatus? AttendanceStatus);
 // Status is null for a session that hasn't ended yet ("chưa điểm danh"); once it has ended, a null
 // Status means the member missed check-in and is presented as Absent.
-public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, AttendanceStatus? Status, int? ClassId = null);
+public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, TimeOnly StartTime,
+    TimeOnly EndTime, string? Room, string Coach, AttendanceStatus? Status, int? ClassId = null);
 public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions, int AttendedSessions, decimal AttendanceRate,
     List<AttendanceHistoryItem> Items, string Formula, bool HasData = true);
 public record CoachScheduleItem(string Type, int ReferenceId, string Title, string Sport, DateOnly Date, TimeOnly StartTime,
@@ -80,7 +81,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         AttendanceHistoryItem ToItem(AttendedRow x, string type)
         {
             var ended = clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow;
-            return new(type, x.ReferenceId, x.Title, x.Date, ended ? x.Status ?? AttendanceStatus.Absent : null, x.ClassId);
+            return new(type, x.ReferenceId, x.Title, x.Date, x.StartTime, x.EndTime, x.Room, x.Coach,
+                ended ? x.Status ?? AttendanceStatus.Absent : null, x.ClassId);
         }
 
         var items = classRows.Select(x => ToItem(x, "Class"))

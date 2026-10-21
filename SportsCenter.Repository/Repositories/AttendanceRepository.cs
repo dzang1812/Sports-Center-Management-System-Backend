@@ -4,7 +4,8 @@ using SportsCenter.Repository.Entities;
 
 namespace SportsCenter.Repository.Repositories;
 
-public record AttendedRow(int ReferenceId, string Title, DateOnly Date, TimeOnly EndTime, AttendanceStatus? Status, int? ClassId = null);
+public record AttendedRow(int ReferenceId, string Title, DateOnly Date, TimeOnly StartTime, TimeOnly EndTime,
+    string? Room, string Coach, AttendanceStatus? Status, int? ClassId = null);
 public record CoachSessionRow(ClassSession Session, string Sport, string Room, int Participants,
     AttendanceStatus? CoachAttendanceStatus, DateTime? CoachCheckedInAt);
 public record RosterRow(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus? Status,
@@ -72,14 +73,16 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
         db.ClassBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status == BookingStatus.Confirmed &&
                 x.Session.Status != SessionStatus.Cancelled &&
                 x.Session.Date >= from && x.Session.Date < toExclusive)
-            .Select(x => new AttendedRow(x.SessionId, x.Session.ClassName, x.Session.Date, x.Session.EndTime,
+            .Select(x => new AttendedRow(x.SessionId, x.Session.ClassName, x.Session.Date, x.Session.StartTime, x.Session.EndTime,
+                x.Session.Room.Name, x.Session.Coach!.FullName,
                 db.Attendances.Where(a => a.SessionId == x.SessionId && a.MemberId == memberId)
                     .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault(), x.Session.ClassId)).ToListAsync(ct);
 
     public Task<List<AttendedRow>> GetMonthPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, CancellationToken ct) =>
         db.PtBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status != BookingStatus.Cancelled &&
                 x.Date >= from && x.Date < toExclusive)
-            .Select(x => new AttendedRow(x.Id, "Personal Training", x.Date, x.EndTime,
+            .Select(x => new AttendedRow(x.Id, "Personal Training", x.Date, x.StartTime, x.EndTime,
+                x.Room == null ? null : x.Room.Name, x.Coach.FullName,
                 db.Attendances.Where(a => a.PtBookingId == x.Id && a.MemberId == memberId)
                     .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault(), null)).ToListAsync(ct);
 
