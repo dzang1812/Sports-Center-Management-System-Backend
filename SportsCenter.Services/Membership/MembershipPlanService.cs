@@ -9,7 +9,7 @@ public record PlanSportDto(int Id, string Name);
 
 public record PlanDto(int Id, string Name, string? Description, int DurationDays, decimal Price, bool IsActive,
     int? SportId, bool IncludesClasses, int PtSessionCredits, bool IncludesGymAccess, int DurationMonths,
-    string PlanType, string? SportName, IReadOnlyList<PlanSportDto> AllowedSports);
+    string PlanType, string? SportName, IReadOnlyList<PlanSportDto> AllowedSports, string? ImageUrl);
 
 public record UpsertPlanRequest(
     [param: Required(ErrorMessage = "Tên gói là bắt buộc"), StringLength(100, MinimumLength = 2)] string Name,
@@ -21,7 +21,8 @@ public record UpsertPlanRequest(
     bool IncludesClasses,
     [param: Range(0, 1000, ErrorMessage = "Số buổi PT 0-1000")] int PtSessionCredits,
     bool? IncludesGymAccess = null,
-    [param: Range(0, 120, ErrorMessage = "Thời hạn 0-120 tháng")] int DurationMonths = 0);
+    [param: Range(0, 120, ErrorMessage = "Thời hạn 0-120 tháng")] int DurationMonths = 0,
+    string? ImageUrl = null);
 
 public interface IMembershipPlanService
 {
@@ -140,6 +141,7 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         plan.IncludesClasses = request.IncludesClasses;
         plan.IncludesGymAccess = request.IncludesGymAccess ?? plan.IncludesGymAccess;
         plan.PtSessionCredits = request.PtSessionCredits;
+        plan.ImageUrl = request.ImageUrl;
     }
 
     private static bool EntitlementsChanged(MembershipPlan plan, UpsertPlanRequest request) =>
@@ -161,7 +163,7 @@ internal static class MembershipPlanPresentation
         plan.Id, plan.Name, plan.Description, plan.DurationDays, plan.Price, plan.IsActive, plan.SportId,
         plan.IncludesClasses, plan.PtSessionCredits, plan.IncludesGymAccess, plan.DurationMonths,
         GetPlanType(plan), plan.Sport?.Name ?? sports.FirstOrDefault(x => x.Id == plan.SportId)?.Name,
-        GetAllowedSports(plan, sports).Select(x => new PlanSportDto(x.Id, x.Name)).ToList());
+        GetAllowedSports(plan, sports).Select(x => new PlanSportDto(x.Id, x.Name)).ToList(), plan.ImageUrl);
 
     public static string GetPlanType(MembershipPlan plan) => plan.PtSessionCredits switch
     {

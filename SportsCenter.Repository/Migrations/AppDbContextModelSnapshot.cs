@@ -17,7 +17,7 @@ namespace SportsCenter.Repository.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.31")
+                .HasAnnotation("ProductVersion", "8.0.32")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -757,6 +757,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<int>("DurationMonths")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
 
                     b.Property<bool>("IncludesClasses")
                         .HasColumnType("boolean");
