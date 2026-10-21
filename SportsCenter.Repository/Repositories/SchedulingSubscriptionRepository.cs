@@ -22,7 +22,7 @@ public interface ISchedulingSubscriptionRepository
     Task<List<SchedulingSubscriptionSnapshot>> ListForConfirmedClassBookingsAsync(
         int sessionId, CancellationToken ct);
     Task<int> TryConsumePtCreditAsync(int subscriptionId, CancellationToken ct);
-    Task RefundPtCreditAsync(int subscriptionId, CancellationToken ct);
+    Task<int> TryRefundPtCreditAsync(int subscriptionId, CancellationToken ct);
 }
 
 public sealed class SchedulingSubscriptionRepository(AppDbContext db) : ISchedulingSubscriptionRepository
@@ -30,7 +30,7 @@ public sealed class SchedulingSubscriptionRepository(AppDbContext db) : ISchedul
     public Task<List<SchedulingSubscriptionSnapshot>> ListForMemberAndSportAsync(
         int memberId, int sportId, CancellationToken ct) =>
         Project(db.MemberSubscriptions.AsNoTracking()
-            .Where(x => x.MemberId == memberId && x.Plan.SportId == sportId))
+            .Where(x => x.MemberId == memberId && (x.Plan.SportId == sportId || x.Plan.SportId == null)))
         .ToListAsync(ct);
 
     public Task<List<SchedulingSubscriptionSnapshot>> ListForConfirmedClassBookingsAsync(
@@ -44,8 +44,9 @@ public sealed class SchedulingSubscriptionRepository(AppDbContext db) : ISchedul
         db.MemberSubscriptions.Where(x => x.Id == subscriptionId && x.RemainingPtSessions > 0)
             .ExecuteUpdateAsync(x => x.SetProperty(s => s.RemainingPtSessions, s => s.RemainingPtSessions - 1), ct);
 
-    public Task RefundPtCreditAsync(int subscriptionId, CancellationToken ct) =>
-        db.MemberSubscriptions.Where(x => x.Id == subscriptionId)
+    public Task<int> TryRefundPtCreditAsync(int subscriptionId, CancellationToken ct) =>
+        db.MemberSubscriptions.Where(x => x.Id == subscriptionId &&
+                                          x.RemainingPtSessions < x.Plan.PtSessionCredits)
             .ExecuteUpdateAsync(x => x.SetProperty(s => s.RemainingPtSessions, s => s.RemainingPtSessions + 1), ct);
 
     private IQueryable<SchedulingSubscriptionSnapshot> Project(IQueryable<MemberSubscription> query) =>

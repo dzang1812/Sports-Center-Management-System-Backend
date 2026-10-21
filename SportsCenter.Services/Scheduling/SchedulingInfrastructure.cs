@@ -76,7 +76,7 @@ public static class SchedulingRules
         bool needsClass = false, bool needsPt = false) =>
         subscription.Status == SubscriptionStatus.Active &&
         subscription.StartDate <= activityDate && activityDate <= subscription.EndDate &&
-        subscription.SportId == sportId &&
+        (subscription.SportId is null || subscription.SportId == sportId) &&
         !subscription.HasPendingPayment &&
         (!needsClass || subscription.IncludesClasses) &&
         (!needsPt || subscription.PtSessionCredits > 0 && subscription.RemainingPtSessions > 0);

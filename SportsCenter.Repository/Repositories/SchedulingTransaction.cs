@@ -5,7 +5,10 @@ using SportsCenter.Repository.Data;
 
 namespace SportsCenter.Repository.Repositories;
 
-public enum ScheduleResourceType : long { Sport = 1, Member = 2, Coach = 3, Room = 4, Class = 5, Session = 6, PtBooking = 7 }
+public enum ScheduleResourceType : long
+{
+    Sport = 1, Member = 2, Coach = 3, Room = 4, Class = 5, Session = 6, PtBooking = 7, MembershipPlan = 8,
+}
 
 public readonly record struct ScheduleResourceLock(ScheduleResourceType Type, int Id)
 {

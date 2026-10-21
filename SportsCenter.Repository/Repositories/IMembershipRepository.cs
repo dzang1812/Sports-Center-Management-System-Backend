@@ -10,12 +10,17 @@ public interface IMembershipRepository
 {
     Task<List<MembershipPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);
     Task<MembershipPlan?> GetPlanAsync(int id, CancellationToken ct);
+    Task<List<Sport>> ListSportsAsync(CancellationToken ct);
     Task<bool> PlanNameExistsAsync(string name, CancellationToken ct);
     Task<bool> PlanNameExistsForOtherAsync(string name, int excludeId, CancellationToken ct);
+    Task<bool> PlanHasSubscriptionsAsync(int planId, CancellationToken ct);
     Task AddPlanAsync(MembershipPlan plan, CancellationToken ct);
 
     Task<MemberSubscription?> GetLatestSubscriptionAsync(int memberId, int planId, CancellationToken ct);
     Task<List<MemberSubscription>> ListSubscriptionsAsync(int memberId, CancellationToken ct);
+    Task<Dictionary<int, PaymentStatus>> GetLatestPaymentStatusesAsync(IReadOnlyCollection<int> subscriptionIds,
+        CancellationToken ct);
+    Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct);
     Task AddSubscriptionAsync(MemberSubscription subscription, CancellationToken ct);
 
     Task AddPaymentAsync(Payment payment, CancellationToken ct);

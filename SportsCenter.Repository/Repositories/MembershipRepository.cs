@@ -9,10 +9,13 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
 {
     public Task<List<MembershipPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct) =>
         (activeOnly ? db.MembershipPlans.Where(x => x.IsActive) : db.MembershipPlans)
-            .AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
+            .Include(x => x.Sport).AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
 
     public Task<MembershipPlan?> GetPlanAsync(int id, CancellationToken ct) =>
-        db.MembershipPlans.FirstOrDefaultAsync(x => x.Id == id, ct);
+        db.MembershipPlans.Include(x => x.Sport).FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public Task<List<Sport>> ListSportsAsync(CancellationToken ct) =>
+        db.Sports.AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
 
     public Task<bool> PlanNameExistsAsync(string name, CancellationToken ct) =>
         db.MembershipPlans.AnyAsync(x => x.Name.ToLower() == name.ToLower(), ct);
@@ -20,15 +23,35 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
     public Task<bool> PlanNameExistsForOtherAsync(string name, int excludeId, CancellationToken ct) =>
         db.MembershipPlans.AnyAsync(x => x.Id != excludeId && x.Name.ToLower() == name.ToLower(), ct);
 
+    public Task<bool> PlanHasSubscriptionsAsync(int planId, CancellationToken ct) =>
+        db.MemberSubscriptions.AnyAsync(x => x.PlanId == planId, ct);
+
     public async Task AddPlanAsync(MembershipPlan plan, CancellationToken ct) => await db.MembershipPlans.AddAsync(plan, ct);
 
     public Task<MemberSubscription?> GetLatestSubscriptionAsync(int memberId, int planId, CancellationToken ct) =>
-        db.MemberSubscriptions.Where(x => x.MemberId == memberId && x.PlanId == planId)
+        db.MemberSubscriptions.Where(x => x.MemberId == memberId && x.PlanId == planId &&
+                                          x.Status == SubscriptionStatus.Active)
             .OrderByDescending(x => x.EndDate).FirstOrDefaultAsync(ct);
 
     public Task<List<MemberSubscription>> ListSubscriptionsAsync(int memberId, CancellationToken ct) =>
-        db.MemberSubscriptions.Include(x => x.Plan).AsNoTracking()
+        db.MemberSubscriptions.Include(x => x.Plan).ThenInclude(x => x.Sport).AsNoTracking()
             .Where(x => x.MemberId == memberId).OrderByDescending(x => x.EndDate).ToListAsync(ct);
+
+    public async Task<Dictionary<int, PaymentStatus>> GetLatestPaymentStatusesAsync(
+        IReadOnlyCollection<int> subscriptionIds, CancellationToken ct)
+    {
+        if (subscriptionIds.Count == 0) return [];
+        return await db.Payments.AsNoTracking()
+            .Where(x => x.SubscriptionId.HasValue && subscriptionIds.Contains(x.SubscriptionId.Value))
+            .GroupBy(x => x.SubscriptionId!.Value)
+            .Select(g => g.OrderByDescending(x => x.Id)
+                .Select(x => new { SubscriptionId = g.Key, x.Status }).First())
+            .ToDictionaryAsync(x => x.SubscriptionId, x => x.Status, ct);
+    }
+
+    public Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
+        db.Payments.AnyAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending &&
+                                  x.Subscription != null && x.Subscription.PlanId == planId, ct);
 
     public async Task AddSubscriptionAsync(MemberSubscription subscription, CancellationToken ct) =>
         await db.MemberSubscriptions.AddAsync(subscription, ct);
