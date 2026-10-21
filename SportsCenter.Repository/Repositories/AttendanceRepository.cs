@@ -16,6 +16,8 @@ public interface IAttendanceRepository
 {
     Task<List<ClassBooking>> GetMemberClassBookingsAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct);
     Task<List<PtBooking>> GetMemberPtBookingsAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct);
+    Task<Dictionary<int, AttendanceStatus>> GetClassAttendanceMapAsync(int memberId, List<int> sessionIds, CancellationToken ct);
+    Task<Dictionary<int, AttendanceStatus>> GetPtAttendanceMapAsync(int memberId, List<int> bookingIds, CancellationToken ct);
     Task<List<AttendedRow>> GetFinalizedClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct);
     Task<List<AttendedRow>> GetFinalizedPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct);
     Task<List<CoachSessionRow>> GetCoachClassSessionsAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
@@ -53,6 +55,16 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
         if (!includeCancelled) query = query.Where(x => x.Status != BookingStatus.Cancelled);
         return query.Include(x => x.Sport).Include(x => x.Room).Include(x => x.Coach).ToListAsync(ct);
     }
+
+    public Task<Dictionary<int, AttendanceStatus>> GetClassAttendanceMapAsync(int memberId, List<int> sessionIds, CancellationToken ct) =>
+        db.Attendances.AsNoTracking()
+            .Where(a => a.MemberId == memberId && a.SessionId != null && sessionIds.Contains(a.SessionId.Value))
+            .ToDictionaryAsync(a => a.SessionId!.Value, a => a.Status, ct);
+
+    public Task<Dictionary<int, AttendanceStatus>> GetPtAttendanceMapAsync(int memberId, List<int> bookingIds, CancellationToken ct) =>
+        db.Attendances.AsNoTracking()
+            .Where(a => a.MemberId == memberId && a.PtBookingId != null && bookingIds.Contains(a.PtBookingId.Value))
+            .ToDictionaryAsync(a => a.PtBookingId!.Value, a => a.Status, ct);
 
     public Task<List<AttendedRow>> GetFinalizedClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct) =>
         db.ClassBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status == BookingStatus.Confirmed &&

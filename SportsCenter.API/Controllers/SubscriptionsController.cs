@@ -17,7 +17,7 @@ public sealed class MemberSubscriptionsController(ISubscriptionService service) 
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    [HttpGet("api/me/subscriptions"), Authorize]
+    [HttpGet("api/me/subscriptions"), Authorize(Roles = "Member")]
     public Task<List<SubscriptionDto>> Mine(CancellationToken ct) => service.ListForMemberAsync(ActorId, null, ct);
 
     [HttpGet("api/members/{memberId:int}/subscriptions"), Authorize(Roles = "Receptionist,Manager")]
