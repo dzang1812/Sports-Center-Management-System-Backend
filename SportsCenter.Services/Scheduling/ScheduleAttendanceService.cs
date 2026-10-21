@@ -13,7 +13,9 @@ namespace SportsCenter.Services.Scheduling;
 public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, string Title, string Sport,
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach,
     BookingStatus Status, AttendanceStatus? AttendanceStatus);
-public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, AttendanceStatus Status);
+// Status is null for a session that hasn't ended yet ("chưa điểm danh"); once it has ended, a null
+// Status means the member missed check-in and is presented as Absent.
+public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, AttendanceStatus? Status, int? ClassId = null);
 public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions, int AttendedSessions, decimal AttendanceRate,
     List<AttendanceHistoryItem> Items, string Formula, bool HasData = true);
 public record CoachScheduleItem(string Type, int ReferenceId, string Title, string Sport, DateOnly Date, TimeOnly StartTime,
@@ -72,18 +74,24 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         await EnsureMemberAsync(memberId, ct);
         var from = new DateOnly(year, month, 1);
         var to = from.AddMonths(1);
-        var today = DateOnly.FromDateTime(clock.LocalNow);
-        var classRows = await attendances.GetFinalizedClassAttendanceAsync(memberId, from, to, today, ct);
-        var ptRows = await attendances.GetFinalizedPtAttendanceAsync(memberId, from, to, today, ct);
-        var items = classRows.Where(x => clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow)
-            .Select(x => new AttendanceHistoryItem("Class", x.ReferenceId, x.Title, x.Date, x.Status ?? AttendanceStatus.Absent))
-            .Concat(ptRows.Where(x => clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow)
-                .Select(x => new AttendanceHistoryItem("PT", x.ReferenceId, x.Title, x.Date, x.Status ?? AttendanceStatus.Absent))).OrderBy(x => x.Date).ToList();
-        var attended = items.Count(x => x.Status is AttendanceStatus.Present or AttendanceStatus.Late);
-        var rate = items.Count == 0 ? 0 : Math.Round(attended * 100m / items.Count, 2);
-        return new(year, month, items.Count, attended, rate, items,
-            "(Present + Late) / eligible sessions that have ended; cancelled bookings/sessions and future sessions are excluded",
-            items.Count > 0);
+        var classRows = await attendances.GetMonthClassAttendanceAsync(memberId, from, to, ct);
+        var ptRows = await attendances.GetMonthPtAttendanceAsync(memberId, from, to, ct);
+
+        AttendanceHistoryItem ToItem(AttendedRow x, string type)
+        {
+            var ended = clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow;
+            return new(type, x.ReferenceId, x.Title, x.Date, ended ? x.Status ?? AttendanceStatus.Absent : null, x.ClassId);
+        }
+
+        var items = classRows.Select(x => ToItem(x, "Class"))
+            .Concat(ptRows.Select(x => ToItem(x, "PT")))
+            .OrderBy(x => x.Date).ToList();
+        var ended = items.Where(x => x.Status is not null).ToList();
+        var attended = ended.Count(x => x.Status is AttendanceStatus.Present or AttendanceStatus.Late);
+        var rate = ended.Count == 0 ? 0 : Math.Round(attended * 100m / ended.Count, 2);
+        return new(year, month, ended.Count, attended, rate, items,
+            "(Present + Late) / eligible sessions that have ended; cancelled bookings/sessions are excluded, upcoming sessions show as chưa điểm danh",
+            ended.Count > 0);
     }
 
     public async Task<List<CoachScheduleItem>> GetCoachScheduleAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct)
