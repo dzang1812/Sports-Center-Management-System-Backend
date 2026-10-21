@@ -14,7 +14,9 @@ public class UserAdminRepository(AppDbContext db) : IUserAdminRepository
         if (!string.IsNullOrWhiteSpace(term))
         {
             term = term.Trim().ToLower();
-            query = query.Where(u => u.FullName.ToLower().Contains(term) || u.Email.Contains(term) || (u.Phone != null && u.Phone.Contains(term)));
+            var asId = int.TryParse(term, out var id) ? id : (int?)null;
+            query = query.Where(u => u.FullName.ToLower().Contains(term) || u.Email.Contains(term) ||
+                (u.Phone != null && u.Phone.Contains(term)) || (asId != null && u.Id == asId));
         }
 
         var total = await query.CountAsync();
