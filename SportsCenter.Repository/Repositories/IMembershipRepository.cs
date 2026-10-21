@@ -25,6 +25,7 @@ public interface IMembershipRepository
 
     Task AddPaymentAsync(Payment payment, CancellationToken ct);
     Task<Payment?> GetPaymentWithDetailsAsync(int id, CancellationToken ct);
+    Task<List<Payment>> ListPendingCounterPaymentsAsync(CancellationToken ct);
     Task<Payment?> GetPaymentByOrderCodeAsync(long orderCode, CancellationToken ct);
     Task<PaymentKey?> GetPaymentKeyAsync(int id, CancellationToken ct);
     Task<PaymentKey?> GetPaymentKeyByOrderCodeAsync(long orderCode, CancellationToken ct);

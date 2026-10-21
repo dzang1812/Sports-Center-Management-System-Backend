@@ -29,6 +29,7 @@ public interface ISubscriptionService
     Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct);
     Task<PaymentDto> GetPaymentAsync(int actorId, int paymentId, CancellationToken ct);
     Task<PaymentDto> ConfirmCounterPaymentAsync(int actorId, int paymentId, CancellationToken ct);
+    Task<List<PaymentDto>> ListPendingCounterPaymentsAsync(int actorId, CancellationToken ct);
     Task HandleWebhookAsync(Webhook webhook, CancellationToken ct);
     Task<string> ConfirmWebhookUrlAsync(int actorId, string webhookUrl, CancellationToken ct);
 }
@@ -126,6 +127,13 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             await transaction.SaveChangesAsync(token);
             return ToPaymentDto(payment, payment.Member, payment.Subscription?.Plan.Name);
         }, ct);
+    }
+
+    public async Task<List<PaymentDto>> ListPendingCounterPaymentsAsync(int actorId, CancellationToken ct)
+    {
+        await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
+        var payments = await repo.ListPendingCounterPaymentsAsync(ct);
+        return payments.Select(p => ToPaymentDto(p, p.Member, p.Subscription?.Plan.Name)).ToList();
     }
 
     public async Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct)

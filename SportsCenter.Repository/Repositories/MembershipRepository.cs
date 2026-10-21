@@ -63,6 +63,13 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .Include(x => x.Subscription!).ThenInclude(x => x.Plan)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
+    // Cash/Card payments a Receptionist started at the desk but hasn't confirmed receiving money for yet.
+    public Task<List<Payment>> ListPendingCounterPaymentsAsync(CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.Status == PaymentStatus.Pending && x.Method != PaymentMethod.BankTransfer)
+            .Include(x => x.Member).Include(x => x.ReceivedBy)
+            .Include(x => x.Subscription!).ThenInclude(x => x.Plan)
+            .OrderByDescending(x => x.Id).ToListAsync(ct);
+
     public Task<Payment?> GetPaymentByOrderCodeAsync(long orderCode, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription).FirstOrDefaultAsync(x => x.PayOsOrderCode == orderCode, ct);
 

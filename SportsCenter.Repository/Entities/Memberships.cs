@@ -15,6 +15,7 @@ public class MembershipPlan
     public bool IncludesClasses { get; set; }
     public bool IncludesGymAccess { get; set; }
     public int PtSessionCredits { get; set; }
+    public string? ImageUrl { get; set; }
 }
 
 public class MemberSubscription

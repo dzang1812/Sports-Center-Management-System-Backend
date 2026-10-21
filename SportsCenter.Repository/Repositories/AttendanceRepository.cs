@@ -4,7 +4,8 @@ using SportsCenter.Repository.Entities;
 
 namespace SportsCenter.Repository.Repositories;
 
-public record AttendedRow(int ReferenceId, string Title, DateOnly Date, TimeOnly EndTime, AttendanceStatus? Status);
+public record AttendedRow(int ReferenceId, string Title, DateOnly Date, TimeOnly StartTime, TimeOnly EndTime,
+    string? Room, string Coach, AttendanceStatus? Status, int? ClassId = null);
 public record CoachSessionRow(ClassSession Session, string Sport, string Room, int Participants,
     AttendanceStatus? CoachAttendanceStatus, DateTime? CoachCheckedInAt);
 public record RosterRow(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus? Status,
@@ -18,8 +19,8 @@ public interface IAttendanceRepository
     Task<List<PtBooking>> GetMemberPtBookingsAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct);
     Task<Dictionary<int, AttendanceStatus>> GetClassAttendanceMapAsync(int memberId, List<int> sessionIds, CancellationToken ct);
     Task<Dictionary<int, AttendanceStatus>> GetPtAttendanceMapAsync(int memberId, List<int> bookingIds, CancellationToken ct);
-    Task<List<AttendedRow>> GetFinalizedClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct);
-    Task<List<AttendedRow>> GetFinalizedPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct);
+    Task<List<AttendedRow>> GetMonthClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, CancellationToken ct);
+    Task<List<AttendedRow>> GetMonthPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, CancellationToken ct);
     Task<List<CoachSessionRow>> GetCoachClassSessionsAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<List<PtBooking>> GetCoachPtBookingsAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
 
@@ -66,20 +67,24 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
             .Where(a => a.MemberId == memberId && a.PtBookingId != null && bookingIds.Contains(a.PtBookingId.Value))
             .ToDictionaryAsync(a => a.PtBookingId!.Value, a => a.Status, ct);
 
-    public Task<List<AttendedRow>> GetFinalizedClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct) =>
+    // Covers the whole month (past and upcoming) — the caller decides what "chưa điểm danh" means
+    // (a null Status with a future end time) vs. a genuinely missed past session.
+    public Task<List<AttendedRow>> GetMonthClassAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, CancellationToken ct) =>
         db.ClassBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status == BookingStatus.Confirmed &&
                 x.Session.Status != SessionStatus.Cancelled &&
-                x.Session.Date >= from && x.Session.Date < toExclusive && x.Session.Date <= today)
-            .Select(x => new AttendedRow(x.SessionId, x.Session.ClassName, x.Session.Date, x.Session.EndTime,
+                x.Session.Date >= from && x.Session.Date < toExclusive)
+            .Select(x => new AttendedRow(x.SessionId, x.Session.ClassName, x.Session.Date, x.Session.StartTime, x.Session.EndTime,
+                x.Session.Room.Name, x.Session.Coach!.FullName,
                 db.Attendances.Where(a => a.SessionId == x.SessionId && a.MemberId == memberId)
-                    .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault())).ToListAsync(ct);
+                    .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault(), x.Session.ClassId)).ToListAsync(ct);
 
-    public Task<List<AttendedRow>> GetFinalizedPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, DateOnly today, CancellationToken ct) =>
+    public Task<List<AttendedRow>> GetMonthPtAttendanceAsync(int memberId, DateOnly from, DateOnly toExclusive, CancellationToken ct) =>
         db.PtBookings.AsNoTracking().Where(x => x.MemberId == memberId && x.Status != BookingStatus.Cancelled &&
-                x.AttendanceFinalizedAt != null && x.Date >= from && x.Date < toExclusive && x.Date <= today)
-            .Select(x => new AttendedRow(x.Id, "Personal Training", x.Date, x.EndTime,
+                x.Date >= from && x.Date < toExclusive)
+            .Select(x => new AttendedRow(x.Id, "Personal Training", x.Date, x.StartTime, x.EndTime,
+                x.Room == null ? null : x.Room.Name, x.Coach.FullName,
                 db.Attendances.Where(a => a.PtBookingId == x.Id && a.MemberId == memberId)
-                    .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault())).ToListAsync(ct);
+                    .Select(a => (AttendanceStatus?)a.Status).FirstOrDefault(), null)).ToListAsync(ct);
 
     public Task<List<CoachSessionRow>> GetCoachClassSessionsAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct) =>
         db.ClassSessions.AsNoTracking().Where(x => x.CoachId == coachId && x.Date >= from && x.Date <= to)
