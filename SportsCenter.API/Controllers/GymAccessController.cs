@@ -35,6 +35,12 @@ public sealed class GymAccessController(IGymAccessService service) : ControllerB
     [HttpPost("check-outs")]
     public Task<GymScanResult> CheckOut(GymScanRequest request, CancellationToken ct) =>
         service.CheckOutAsync(ActorId, request, ct);
+
+    // No memberId: today's feed across every member (reception's live check-in list).
+    [HttpGet("visits")]
+    public Task<GymVisitHistoryResponse> Visits(
+        DateOnly from, DateOnly to, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.ListVisitsAsync(ActorId, null, from, to, page, pageSize, ct);
 }
 
 [ApiController, Authorize(Roles = "Receptionist,Manager")]

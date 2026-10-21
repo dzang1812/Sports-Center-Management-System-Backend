@@ -23,8 +23,9 @@ public interface IGymAccessRepository
     Task<List<GymSubscriptionSnapshot>> ListSubscriptionsAsync(int memberId, CancellationToken ct);
     Task<CheckIn?> GetOpenVisitAsync(int memberId, CancellationToken ct);
     void AddVisit(CheckIn visit);
+    // memberId null lists visits across all members (reception's today feed); otherwise scoped to one member.
     Task<(List<CheckIn> Items, int Total)> ListVisitsAsync(
-        int memberId, DateTime fromUtc, DateTime toUtcExclusive, int page, int pageSize, CancellationToken ct);
+        int? memberId, DateTime fromUtc, DateTime toUtcExclusive, int page, int pageSize, CancellationToken ct);
 }
 
 public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
@@ -60,14 +61,15 @@ public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
     public void AddVisit(CheckIn visit) => db.CheckIns.Add(visit);
 
     public async Task<(List<CheckIn> Items, int Total)> ListVisitsAsync(
-        int memberId, DateTime fromUtc, DateTime toUtcExclusive, int page, int pageSize, CancellationToken ct)
+        int? memberId, DateTime fromUtc, DateTime toUtcExclusive, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.CheckIns.AsNoTracking().Where(x => x.MemberId == memberId &&
+        var query = db.CheckIns.AsNoTracking().Where(x =>
+            (memberId == null || x.MemberId == memberId) &&
             x.CheckedInAt >= fromUtc && x.CheckedInAt < toUtcExclusive);
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.CheckedInAt)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Include(x => x.Subscription!).ThenInclude(x => x.Plan)
+            .Include(x => x.Member).Include(x => x.Subscription!).ThenInclude(x => x.Plan)
             .Include(x => x.CheckedInBy).Include(x => x.CheckedOutBy)
             .ToListAsync(ct);
         return (items, total);

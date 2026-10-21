@@ -35,6 +35,7 @@ public sealed record GymScanResult(
 public sealed record GymVisitDto(
     int Id,
     int MemberId,
+    string MemberName,
     int? SubscriptionId,
     string? PlanName,
     DateTime CheckedInAt,
@@ -158,15 +159,16 @@ public sealed class GymAccessService(
         ValidateRange(from, to);
         var actor = await users.GetByIdAsync(actorId)
             ?? throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
-        var targetId = actor.Role switch
+        // Member: always scoped to self. Receptionist/Manager: a given memberId scopes to that member,
+        // null lists every member's visits (the reception's today-feed).
+        int? targetId = actor.Role switch
         {
             UserRole.Member when memberId is null || memberId == actorId => actorId,
             UserRole.Member => throw SchedulingException.Forbidden("GYM_HISTORY_NOT_OWNED", "Không thể xem lịch sử của hội viên khác."),
-            UserRole.Receptionist or UserRole.Manager when memberId is not null => memberId.Value,
-            UserRole.Receptionist or UserRole.Manager => throw new SchedulingException("TARGET_MEMBER_REQUIRED", "Thiếu memberId."),
+            UserRole.Receptionist or UserRole.Manager => memberId,
             _ => throw SchedulingException.Forbidden("ROLE_NOT_ALLOWED", "Vai trò không được xem lịch sử Gym."),
         };
-        await RequireMemberAsync(targetId, requireActive: false, ct);
+        if (targetId is { } id) await RequireMemberAsync(id, requireActive: false, ct);
         page = Math.Max(1, page);
         pageSize = pageSize is 10 or 20 or 50 ? pageSize : 20;
         var fromUtc = clock.ToUtc(from, TimeOnly.MinValue);
@@ -262,7 +264,7 @@ public sealed class GymAccessService(
             visit.CheckedInAt, visit.CheckedOutAt);
 
     private static GymVisitDto ToVisitDto(CheckIn x) => new(
-        x.Id, x.MemberId, x.SubscriptionId, x.Subscription?.Plan.Name, x.CheckedInAt, x.CheckedOutAt,
+        x.Id, x.MemberId, x.Member.FullName, x.SubscriptionId, x.Subscription?.Plan.Name, x.CheckedInAt, x.CheckedOutAt,
         x.CheckInSource, x.CheckOutSource, x.CheckedInById, x.CheckedInBy.FullName,
         x.CheckedOutById, x.CheckedOutBy?.FullName);
 
