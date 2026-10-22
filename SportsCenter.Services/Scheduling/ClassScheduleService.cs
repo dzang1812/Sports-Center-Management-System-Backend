@@ -81,10 +81,15 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var entity = await classes.GetClassAsync(id, token)
                 ?? throw SchedulingException.NotFound("CLASS_NOT_FOUND", "Không tìm thấy lớp.");
             var (sport, room) = await ValidateSportRoomAsync(request.SportId, request.RoomId, request.Capacity, token);
-            var nameChanged = entity.Name != request.Name.Trim();
-            var levelChanged = entity.Level != request.Level;
-            var capacityChanged = entity.Capacity != request.Capacity;
-            var roomChanged = entity.RoomId != request.RoomId;
+            var oldName = entity.Name;
+            var oldLevel = entity.Level;
+            var oldCapacity = entity.Capacity;
+            var oldRoomId = entity.RoomId;
+            var requestedName = request.Name.Trim();
+            var nameChanged = oldName != requestedName;
+            var levelChanged = oldLevel != request.Level;
+            var capacityChanged = oldCapacity != request.Capacity;
+            var roomChanged = oldRoomId != request.RoomId;
             var localNow = clock.LocalNow;
             var today = DateOnly.FromDateTime(localNow);
             var timeNow = TimeOnly.FromDateTime(localNow);
@@ -97,14 +102,22 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (await classes.HasFutureSessionsOutsideRangeAsync(id, today, timeNow, request.StartDate, request.EndDate, token))
                 throw SchedulingException.Conflict("CLASS_DATE_EXCLUDES_SESSION", "Khoảng ngày mới loại bỏ buổi học đã tồn tại.");
             var futureSessions = await classes.GetFutureScheduledSessionsAsync(id, today, timeNow, true, token);
-            if (capacityChanged && futureSessions.Any(x => roomChanged ? room.Capacity < request.Capacity : x.Room.Capacity < request.Capacity))
+            if (futureSessions.Any(session =>
+                {
+                    var propagateCapacity = capacityChanged && session.Capacity == oldCapacity;
+                    var propagateRoom = roomChanged && session.RoomId == oldRoomId;
+                    if (!propagateCapacity && !propagateRoom) return false;
+                    var resultingCapacity = propagateCapacity ? request.Capacity : session.Capacity;
+                    var resultingRoomCapacity = propagateRoom ? room.Capacity : session.Room.Capacity;
+                    return resultingCapacity > resultingRoomCapacity;
+                }))
                 throw SchedulingException.Conflict("CAPACITY_EXCEEDS_SESSION_ROOM", "Sức chứa mới vượt quá phòng của một buổi tương lai.");
             if (request.CoachId is { } coachId && coachId != entity.CoachId)
                 throw new SchedulingException("USE_ASSIGN_COACH", "Dùng endpoint /api/classes/{id}/coach để đổi huấn luyện viên.");
             if (roomChanged && entity.CoachId is { } assignedCoachId)
             {
                 var conflicts = new List<SessionConflict>();
-                foreach (var session in futureSessions)
+                foreach (var session in futureSessions.Where(x => x.RoomId == oldRoomId))
                     conflicts.AddRange(await FindResourceConflictsAsync([session.Date], session.StartTime, session.EndTime,
                         request.RoomId, assignedCoachId, session.Id, token));
                 if (conflicts.Count != 0)
@@ -112,12 +125,12 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             }
             foreach (var session in futureSessions)
             {
-                if (nameChanged) session.ClassName = request.Name.Trim();
-                if (levelChanged) session.Level = request.Level;
-                if (capacityChanged) session.Capacity = request.Capacity;
-                if (roomChanged) session.RoomId = request.RoomId;
+                if (nameChanged && session.ClassName == oldName) session.ClassName = requestedName;
+                if (levelChanged && session.Level == oldLevel) session.Level = request.Level;
+                if (capacityChanged && session.Capacity == oldCapacity) session.Capacity = request.Capacity;
+                if (roomChanged && session.RoomId == oldRoomId) session.RoomId = request.RoomId;
             }
-            entity.Name = request.Name.Trim(); entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
+            entity.Name = requestedName; entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
             entity.RoomId = room.Id; entity.Capacity = request.Capacity; entity.Level = request.Level;
             entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status;
             audit.AddAudit(actorId, "Class.Update", nameof(Class), id, request);

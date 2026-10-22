@@ -156,17 +156,16 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
                 settings.PtCancellationCutoffHours);
             if (!timely && !settings.AllowLatePtCancellation)
                 throw SchedulingException.Conflict("PT_CANCELLATION_CUTOFF", $"Phải đổi PT trước giờ bắt đầu ít nhất {settings.PtCancellationCutoffHours} giờ.");
-            if (timely) await RefundOnceAsync(old, token);
-            var subscriptionId = await ValidateNewBookingAsync(old.MemberId, old.CoachId, old.SportId, request.Date, request.StartTime, request.RoomId, old.Id, token);
-            await ConsumeCreditAsync(subscriptionId, token);
+            await ValidateBookingTargetAsync(old.MemberId, old.CoachId, old.SportId, request.Date, request.StartTime, request.RoomId, old.Id, token);
+            await ValidateRescheduleSubscriptionAsync(old, request.Date, token);
             CancelBooking(old, actorId, "Rescheduled");
             old.IsLateCancellation = !timely;
-            var created = NewBooking(actorId, old.MemberId, subscriptionId,
+            var created = NewBooking(actorId, old.MemberId, old.SubscriptionId,
                 new CreatePtBookingRequest(old.CoachId, old.SportId, request.Date, request.StartTime, request.RoomId, old.MemberId));
             pt.AddBooking(created);
             await transaction.SaveChangesAsync(token);
             audit.AddAudit(actorId, "PtBooking.Reschedule", nameof(PtBooking), old.Id,
-                new { NewBookingId = created.Id, TargetMemberId = old.MemberId, RefundedOldCredit = timely, Policy = timely ? "refund-old-consume-new" : "consume-additional-credit" });
+                new { NewBookingId = created.Id, TargetMemberId = old.MemberId, ReusedSubscriptionId = old.SubscriptionId, Policy = "reuse-consumed-credit" });
             notifications.AddNotification(old.MemberId, actorId, NotificationType.ScheduleChange, "Đã đổi lịch PT",
                 $"Lịch PT mới: {created.Date:yyyy-MM-dd} {created.StartTime:HH:mm}.", $"pt-booking:{old.Id}:rescheduled:{created.Id}");
             notifications.AddNotification(old.CoachId, actorId, NotificationType.ScheduleChange, "Lịch PT đã đổi",
@@ -195,6 +194,16 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
     private async Task<int> ValidateNewBookingAsync(int memberId, int coachId, int sportId, DateOnly date, TimeOnly start,
         int? roomId, int? ignoredPtId, CancellationToken ct)
     {
+        await ValidateBookingTargetAsync(memberId, coachId, sportId, date, start, roomId, ignoredPtId, ct);
+        var subscriptionId = (await subscriptions.ListForMemberAndSportAsync(memberId, sportId, ct))
+            .Where(x => SchedulingRules.SubscriptionCovers(x, sportId, date, needsPt: true))
+            .OrderBy(x => x.EndDate).ThenBy(x => x.Id).Select(x => (int?)x.Id).FirstOrDefault();
+        return subscriptionId ?? throw SchedulingException.Conflict("PT_CREDIT_NOT_ELIGIBLE", "Không có gói PT Active đúng bộ môn, còn hạn và còn buổi.");
+    }
+
+    private async Task ValidateBookingTargetAsync(int memberId, int coachId, int sportId, DateOnly date, TimeOnly start,
+        int? roomId, int? ignoredPtId, CancellationToken ct)
+    {
         var end = start.AddHours(1);
         if (start.Minute != 0 || start.Second != 0) throw new SchedulingException("PT_SLOT_ALIGNMENT", "Slot PT phải bắt đầu đúng giờ và dài 60 phút.");
         SchedulingRules.EnsureBookingWindow(clock.ToUtc(date, start), clock.UtcNow,
@@ -213,10 +222,20 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
             if (await scheduleConflicts.IsRoomBusyAsync(id, date, start, end, ignoredPtId, ct))
                 throw SchedulingException.Conflict("ROOM_SCHEDULE_CONFLICT", "Phòng đã có lịch trùng giờ.");
         }
-        var subscriptionId = (await subscriptions.ListForMemberAndSportAsync(memberId, sportId, ct))
-            .Where(x => SchedulingRules.SubscriptionCovers(x, sportId, date, needsPt: true))
-            .OrderBy(x => x.EndDate).ThenBy(x => x.Id).Select(x => (int?)x.Id).FirstOrDefault();
-        return subscriptionId ?? throw SchedulingException.Conflict("PT_CREDIT_NOT_ELIGIBLE", "Không có gói PT Active đúng bộ môn, còn hạn và còn buổi.");
+    }
+
+    private async Task ValidateRescheduleSubscriptionAsync(PtBooking booking, DateOnly targetDate, CancellationToken ct)
+    {
+        var subscription = (await subscriptions.ListForMemberAndSportAsync(booking.MemberId, booking.SportId, ct))
+            .SingleOrDefault(x => x.Id == booking.SubscriptionId);
+        var coversTarget = subscription is not null &&
+            subscription.Status == SubscriptionStatus.Active &&
+            subscription.StartDate <= targetDate && targetDate <= subscription.EndDate &&
+            (subscription.SportId is null || subscription.SportId == booking.SportId) &&
+            !subscription.HasPendingPayment && subscription.PtSessionCredits > 0;
+        if (!coversTarget)
+            throw SchedulingException.Conflict("PT_SUBSCRIPTION_NOT_ELIGIBLE_FOR_RESCHEDULE",
+                "Gói PT đã dùng cho booking không còn hợp lệ tại ngày tập mới.");
     }
 
     private async Task ConsumeCreditAsync(int subscriptionId, CancellationToken ct)
