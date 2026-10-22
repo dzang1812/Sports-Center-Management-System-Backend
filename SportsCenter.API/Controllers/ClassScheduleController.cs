@@ -22,8 +22,8 @@ public sealed class SessionsController(IClassScheduleService service) : Controll
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     [HttpGet, AllowAnonymous]
-    public Task<PagedResponse<SessionDto>> List(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level,
-        int page = 1, int pageSize = 20, CancellationToken ct = default) => service.ListSessionsAsync(sportId, from, to, coachId, level, page, pageSize, ct);
+    public Task<PagedResponse<SessionDto>> List(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId,
+        int page = 1, int pageSize = 20, CancellationToken ct = default) => service.ListSessionsAsync(sportId, from, to, coachId, level, classId, page, pageSize, ct);
     [HttpPut("{id:int}"), Authorize(Roles = "Manager")] public Task<SessionDto> Update(int id, UpdateSessionRequest request, CancellationToken ct) => service.UpdateSessionAsync(ActorId, id, request, ct);
     [HttpPatch("{id:int}/cancel"), Authorize(Roles = "Manager")] public async Task<IActionResult> Cancel(int id, CancelSessionRequest request, CancellationToken ct)
     { await service.CancelSessionAsync(ActorId, id, request, ct); return NoContent(); }

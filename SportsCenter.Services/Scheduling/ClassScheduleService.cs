@@ -30,7 +30,7 @@ public interface IClassScheduleService
     Task<ClassDto> UpdateClassAsync(int actorId, int id, UpsertClassRequest request, CancellationToken ct);
     Task<GenerateSessionsResponse> GenerateAsync(int actorId, int classId, GenerateSessionsRequest request, CancellationToken ct);
     Task<ClassDto> AssignCoachAsync(int actorId, int classId, AssignCoachRequest request, CancellationToken ct);
-    Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int page, int pageSize, CancellationToken ct);
+    Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId, int page, int pageSize, CancellationToken ct);
     Task<SessionDto> UpdateSessionAsync(int actorId, int sessionId, UpdateSessionRequest request, CancellationToken ct);
     Task CancelSessionAsync(int actorId, int sessionId, CancelSessionRequest request, CancellationToken ct);
 }
@@ -199,13 +199,13 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             return await GetClassAsync(classId, token);
         }, ct);
 
-    public async Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
         from ??= DateOnly.FromDateTime(clock.LocalNow);
         to ??= from.Value.AddDays(30);
         if (to < from || to.Value.DayNumber - from.Value.DayNumber > 180) throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng lọc tối đa 180 ngày.");
-        var (rows, total) = await classes.ListOpenSessionsAsync(sportId, from.Value, to.Value, coachId, level, page, pageSize, ct);
+        var (rows, total) = await classes.ListOpenSessionsAsync(sportId, from.Value, to.Value, coachId, level, classId, page, pageSize, ct);
         var items = rows.Select(x => ToSessionDto(x.Session, x.Class, x.Sport, x.Room, x.Coach, x.Booked)).ToList();
         return new(items, total, page, pageSize);
     }
