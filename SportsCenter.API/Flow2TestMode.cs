@@ -1,63 +1,95 @@
+using System.Threading;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.API;
 
-public sealed class Flow2TestMode(
-    IHttpContextAccessor httpContextAccessor,
-    IWebHostEnvironment environment,
-    IConfiguration configuration) : IFlow2TestMode
+public sealed class Flow2TimeRulesState : IFlow2TimeRules
 {
-    public const string HeaderName = "X-Flow2-Test-Mode";
+    private int enforceTimeRules;
 
-    public bool IsAvailable =>
-        environment.IsDevelopment() &&
-        configuration.GetValue<bool>("EnableFlow2TimeTestMode");
-
-    public bool IsRequested =>
-        string.Equals(
-            httpContextAccessor.HttpContext?.Request.Headers[HeaderName].ToString(),
-            bool.TrueString,
-            StringComparison.OrdinalIgnoreCase);
-
-    public bool IsActive
+    public Flow2TimeRulesState(IWebHostEnvironment environment, IConfiguration configuration)
     {
-        get
-        {
-            var user = httpContextAccessor.HttpContext?.User;
-            return IsAvailable &&
-                IsRequested &&
-                user?.Identity?.IsAuthenticated == true &&
-                (user.IsInRole("Manager") || user.IsInRole("Admin"));
-        }
+        IsAvailable = environment.IsDevelopment() &&
+            configuration.GetValue<bool>("Flow2TimeRules:AllowGlobalSwitch");
+        var configuredDefault = configuration.GetValue<bool?>("Flow2TimeRules:EnforceTimeRules") ?? false;
+        enforceTimeRules = IsAvailable && !configuredDefault ? 0 : 1;
+    }
+
+    public bool IsAvailable { get; }
+    public bool EnforceTimeRules => Volatile.Read(ref enforceTimeRules) == 1;
+
+    public bool TrySetEnforcement(bool enforce)
+    {
+        if (!IsAvailable) return false;
+        Interlocked.Exchange(ref enforceTimeRules, enforce ? 1 : 0);
+        return true;
     }
 }
 
+public sealed record UpdateFlow2TimeRulesRequest(bool? EnforceTimeRules);
+
 [ApiController]
-[Route("api/dev/flow2-test-mode")]
-[Authorize(Roles = "Manager,Admin")]
-public sealed class Flow2TestModeController(IFlow2TestMode testMode) : ControllerBase
+[Route("api/dev/flow2-time-rules")]
+[Authorize]
+public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : ControllerBase
 {
-    private static readonly string[] SupportedTimeGuards =
+    private static readonly string[] BypassedTimeGuards =
     [
-        "class session move: target must be in the future",
-        "class booking: configured open/close window (session must still be in the future)",
-        "class cancellation: configured cutoff only (started/finalized/attended sessions stay blocked)",
-        "PT booking: configured open/close window (slot must still be in the future)",
-        "PT reschedule: configured cutoff only (occurred/finalized bookings stay blocked)",
-        "class check-in: opens-before-start and closes-at-end window",
-        "class check-in code: expiry time",
-        "PT attendance: correct-day and has-started checks"
+        "class and PT booking open/close windows",
+        "class and PT booking subscription start/end dates",
+        "class booking cancellation cutoff",
+        "PT cancellation and reschedule cutoffs",
+        "class session generation and move future-date restrictions",
+        "class check-in open/close window",
+        "class check-in code expiry",
+        "PT attendance correct-day and has-started restrictions"
+    ];
+
+    private static readonly string[] PreservedIntegrityGuards =
+    [
+        "authentication and role authorization",
+        "cancelled/completed/finalized/attended state protections",
+        "capacity, duplicate booking and schedule conflicts",
+        "payment and subscription entitlement",
+        "PT credit consumption and idempotent refund",
+        "class, room, coach and member validity"
     ];
 
     [HttpGet]
-    public IActionResult Get() => Ok(new
+    public IActionResult Get() => Ok(Status());
+
+    [HttpPut]
+    [Authorize(Roles = "Manager")]
+    public IActionResult Put(UpdateFlow2TimeRulesRequest request)
     {
-        available = testMode.IsAvailable,
-        requested = testMode.IsRequested,
-        active = testMode.IsActive,
-        header = Flow2TestMode.HeaderName,
-        supportedTimeGuards = SupportedTimeGuards,
-    });
+        if (request.EnforceTimeRules is not { } enforceTimeRules)
+            return BadRequest(new
+            {
+                errorCode = "VALIDATION_ERROR",
+                message = "enforceTimeRules is required and must be true or false.",
+            });
+
+        if (!timeRules.TrySetEnforcement(enforceTimeRules))
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                errorCode = "FLOW2_TIME_RULES_SWITCH_DISABLED",
+                message = "Global Flow 2 time rules switch is only available when explicitly enabled in Development.",
+                available = false,
+                enforceTimeRules = true,
+            });
+
+        return Ok(Status());
+    }
+
+    private object Status() => new
+    {
+        available = timeRules.IsAvailable,
+        enforceTimeRules = timeRules.EnforceTimeRules,
+        canManage = User.IsInRole("Manager"),
+        scope = "global",
+        bypassedTimeGuards = BypassedTimeGuards,
+        preservedIntegrityGuards = PreservedIntegrityGuards,
+    };
 }
