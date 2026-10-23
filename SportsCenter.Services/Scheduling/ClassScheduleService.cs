@@ -37,7 +37,7 @@ public interface IClassScheduleService
 
 public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepository catalog, IScheduleConflictRepository scheduleConflicts,
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
-    ISchedulingTransaction transaction, IAppClock clock) : IClassScheduleService
+    ISchedulingTransaction transaction, IAppClock clock, IFlow2TestMode flow2TestMode) : IClassScheduleService
 {
     public async Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct)
     {
@@ -241,7 +241,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             await transaction.LockAsync(lockList, token);
             var session = await classes.GetSessionWithClassCoachAndRoomAsync(sessionId, token);
             if (session.Status != SessionStatus.Scheduled) throw SchedulingException.Conflict("SESSION_NOT_EDITABLE", "Chỉ sửa được buổi đang lên lịch.");
-            if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow || clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow)
+            if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow ||
+                (!flow2TestMode.IsActive && clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow))
                 throw SchedulingException.Conflict("SESSION_NOT_FUTURE", "Không thể sửa buổi đã diễn ra hoặc chuyển lịch về quá khứ.");
             if (request.Date < session.Class.StartDate || request.Date > session.Class.EndDate) throw new SchedulingException("DATE_OUTSIDE_CLASS", "Ngày nằm ngoài khoảng của lớp.");
             var room = await catalog.GetRoomAsync(request.RoomId, token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");

@@ -16,7 +16,7 @@ public interface IClassBookingService
 
 public sealed class ClassBookingService(IClassRepository classes, IScheduleConflictRepository conflicts, IScheduleUserRepository users,
     ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
-    ISchedulingTransaction transaction, IAppClock clock,
+    ISchedulingTransaction transaction, IAppClock clock, IFlow2TestMode flow2TestMode,
     IOptions<SchedulingOptions> options) : IClassBookingService
 {
     private readonly SchedulingOptions settings = options.Value;
@@ -42,8 +42,17 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
             ValidateBookable(session);
             var eligibleCoach = await users.IsCoachForSportAsync(session.CoachId!.Value, session.Class.SportId, token);
             if (!eligibleCoach) throw SchedulingException.Conflict("COACH_NOT_ELIGIBLE", "Huấn luyện viên không còn đúng chuyên môn.");
-            SchedulingRules.EnsureBookingWindow(clock.ToUtc(session.Date, session.StartTime), clock.UtcNow,
-                settings.ClassBookingOpensDaysBefore, settings.ClassBookingClosesMinutesBefore);
+            var startUtc = clock.ToUtc(session.Date, session.StartTime);
+            if (flow2TestMode.IsActive)
+            {
+                if (startUtc <= clock.UtcNow)
+                    throw SchedulingException.Conflict("BOOKING_CLOSED", "Không thể tạo booking cho buổi đã bắt đầu.");
+            }
+            else
+            {
+                SchedulingRules.EnsureBookingWindow(startUtc, clock.UtcNow,
+                    settings.ClassBookingOpensDaysBefore, settings.ClassBookingClosesMinutesBefore);
+            }
             var duplicate = await classes.HasConfirmedBookingAsync(sessionId, memberId, token);
             if (duplicate) throw SchedulingException.Conflict("BOOKING_EXISTS", "Bạn đã đặt buổi học này.");
             var booked = await classes.CountConfirmedBookingsAsync(sessionId, token);
@@ -90,7 +99,7 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
                 await classes.HasAttendedAsync(booking.SessionId, booking.MemberId, token))
                 throw SchedulingException.Conflict("CLASS_ALREADY_OCCURRED", "Không thể hủy booking đã bắt đầu, đã hoàn tất hoặc đã ghi nhận tham dự.");
             var timely = SchedulingRules.MeetsCancellationCutoff(startUtc, clock.UtcNow, settings.ClassCancellationCutoffHours);
-            if (!timely && !settings.AllowLateClassCancellation)
+            if (!timely && !settings.AllowLateClassCancellation && !flow2TestMode.IsActive)
                 throw SchedulingException.Conflict("CLASS_CANCELLATION_CUTOFF", $"Phải hủy lớp trước giờ bắt đầu ít nhất {settings.ClassCancellationCutoffHours} giờ.");
             booking.Status = BookingStatus.Cancelled; booking.CancelledAt = clock.UtcNow; booking.CancelledByUserId = actorId;
             booking.CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();

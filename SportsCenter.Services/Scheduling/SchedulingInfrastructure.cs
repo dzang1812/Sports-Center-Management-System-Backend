@@ -39,6 +39,13 @@ public interface IAppClock
     DateTime ToUtc(DateOnly date, TimeOnly time);
 }
 
+public interface IFlow2TestMode
+{
+    bool IsAvailable { get; }
+    bool IsRequested { get; }
+    bool IsActive { get; }
+}
+
 public sealed class VietnamClock : IAppClock
 {
     private static readonly TimeZoneInfo Zone = FindZone();

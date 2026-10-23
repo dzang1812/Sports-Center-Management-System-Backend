@@ -31,7 +31,7 @@ public interface IPtService
 
 public sealed class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
-    ISchedulingTransaction transaction, IAppClock clock, IOptions<SchedulingOptions> options) : IPtService
+    ISchedulingTransaction transaction, IAppClock clock, IFlow2TestMode flow2TestMode, IOptions<SchedulingOptions> options) : IPtService
 {
     private readonly SchedulingOptions settings = options.Value;
 
@@ -154,7 +154,7 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
             if (old.Date == request.Date && old.StartTime == request.StartTime && old.RoomId == request.RoomId) return ToDto(old);
             var timely = SchedulingRules.MeetsCancellationCutoff(clock.ToUtc(old.Date, old.StartTime), clock.UtcNow,
                 settings.PtCancellationCutoffHours);
-            if (!timely && !settings.AllowLatePtCancellation)
+            if (!timely && !settings.AllowLatePtCancellation && !flow2TestMode.IsActive)
                 throw SchedulingException.Conflict("PT_CANCELLATION_CUTOFF", $"Phải đổi PT trước giờ bắt đầu ít nhất {settings.PtCancellationCutoffHours} giờ.");
             await ValidateBookingTargetAsync(old.MemberId, old.CoachId, old.SportId, request.Date, request.StartTime, request.RoomId, old.Id, token);
             await ValidateRescheduleSubscriptionAsync(old, request.Date, token);
@@ -206,8 +206,17 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
     {
         var end = start.AddHours(1);
         if (start.Minute != 0 || start.Second != 0) throw new SchedulingException("PT_SLOT_ALIGNMENT", "Slot PT phải bắt đầu đúng giờ và dài 60 phút.");
-        SchedulingRules.EnsureBookingWindow(clock.ToUtc(date, start), clock.UtcNow,
-            settings.PtBookingOpensDaysBefore, settings.PtBookingClosesMinutesBefore);
+        var startUtc = clock.ToUtc(date, start);
+        if (flow2TestMode.IsActive)
+        {
+            if (startUtc <= clock.UtcNow)
+                throw SchedulingException.Conflict("BOOKING_CLOSED", "Không thể tạo booking PT cho slot đã bắt đầu.");
+        }
+        else
+        {
+            SchedulingRules.EnsureBookingWindow(startUtc, clock.UtcNow,
+                settings.PtBookingOpensDaysBefore, settings.PtBookingClosesMinutesBefore);
+        }
         await EnsureCoachAsync(coachId, sportId, ct);
         var memberActive = await users.IsActiveInRoleAsync(memberId, UserRole.Member, ct);
         if (!memberActive) throw SchedulingException.Conflict("MEMBER_INACTIVE", "Hội viên không hoạt động.");
