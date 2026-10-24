@@ -28,7 +28,7 @@ public record CancelSessionRequest([param: Required, StringLength(500, MinimumLe
 
 public interface IClassScheduleService
 {
-    Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct);
+    Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct);
     Task<List<PublicClassDto>> ListFeaturedClassesAsync(int count, CancellationToken ct);
     Task<List<PublicClassDto>> ListPublicClassesAsync(int? sportId, Level? level, CancellationToken ct);
     Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct);
@@ -44,10 +44,10 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock) : IClassScheduleService
 {
-    public async Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
-        var (rows, total) = await classes.ListClassesAsync(page, pageSize, ct);
+        var (rows, total) = await classes.ListClassesAsync(sportId, status, q, page, pageSize, ct);
         return new(rows.Select(ToClassDto).ToList(), total, page, pageSize);
     }
 

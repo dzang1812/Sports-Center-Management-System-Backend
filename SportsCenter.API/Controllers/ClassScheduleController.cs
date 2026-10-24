@@ -10,7 +10,8 @@ namespace SportsCenter.API.Controllers;
 public sealed class ClassesController(IClassScheduleService service) : ControllerBase
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    [HttpGet] public Task<PagedResponse<ClassDto>> List(int page = 1, int pageSize = 20, CancellationToken ct = default) => service.ListClassesAsync(page, pageSize, ct);
+    [HttpGet] public Task<PagedResponse<ClassDto>> List(int? sportId, ClassStatus? status, string? q, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.ListClassesAsync(sportId, status, q, page, pageSize, ct);
     [HttpGet("featured"), AllowAnonymous] public Task<List<PublicClassDto>> Featured(int count = 4, CancellationToken ct = default) => service.ListFeaturedClassesAsync(count, ct);
     [HttpGet("public"), AllowAnonymous] public Task<List<PublicClassDto>> Public(int? sportId, Level? level, CancellationToken ct = default) => service.ListPublicClassesAsync(sportId, level, ct);
     [HttpPost] public Task<ClassDto> Create(UpsertClassRequest request, CancellationToken ct) => service.CreateClassAsync(ActorId, request, ct);
