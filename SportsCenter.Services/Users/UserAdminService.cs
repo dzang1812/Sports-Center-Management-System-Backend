@@ -9,7 +9,7 @@ namespace SportsCenter.Services.Users;
 
 public enum UserStatus { Active, Locked }
 
-public record UserListItem(int Id, string Email, string FullName, string? Phone, UserRole Role, bool IsActive, DateTime CreatedAt, string[] Specialties);
+public record UserListItem(int Id, string Email, string FullName, string? Phone, UserRole Role, bool IsActive, DateTime CreatedAt, string[] Specialties, string? AvatarUrl, bool EmailVerified);
 
 public record PagedResult<T>(List<T> Items, int Total, int Page, int PageSize);
 
@@ -17,10 +17,11 @@ public record PagedResult<T>(List<T> Items, int Total, int Page, int PageSize);
 public record CreateUserRequest(
     [param: Required(ErrorMessage = "Email là bắt buộc"), EmailAddress(ErrorMessage = "Email sai định dạng")] string Email,
     [param: Required(ErrorMessage = "Họ tên là bắt buộc")] string FullName,
-    string? Phone, UserRole Role, string[]? Specialties);
+    string? Phone, UserRole Role, string[]? Specialties, string? AvatarUrl = null);
 
 // Email is not editable.
-public record UpdateUserRequest([param: Required(ErrorMessage = "Họ tên là bắt buộc")] string FullName, string? Phone, string[]? Specialties);
+public record UpdateUserRequest([param: Required(ErrorMessage = "Họ tên là bắt buộc")] string FullName, string? Phone,
+    string[]? Specialties, string? AvatarUrl = null);
 
 public record CreatedUserResponse(UserListItem User, string TempPassword);
 
@@ -32,6 +33,7 @@ public interface IUserAdminService
     Task<CreatedUserResponse> CreateAsync(int actorId, CreateUserRequest request);
     Task<UserListItem> UpdateAsync(int actorId, int id, UpdateUserRequest request);
     Task SetStatusAsync(int actorId, int id, bool isActive);
+    Task VerifyEmailAsync(int actorId, int id);
 }
 
 public class UserAdminService(IUserRepository users, IUserAdminRepository admin, IAuditLogRepository audit) : IUserAdminService
@@ -62,6 +64,7 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
             FullName = r.FullName.Trim(),
             Phone = r.Phone,
             Role = r.Role,
+            AvatarUrl = r.AvatarUrl,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
             MustChangePassword = true,
         };
@@ -85,6 +88,7 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
 
         user.FullName = r.FullName.Trim();
         user.Phone = r.Phone;
+        user.AvatarUrl = r.AvatarUrl;
         if (user.Role == UserRole.Coach)
         {
             user.CoachProfile ??= new CoachProfile();
@@ -103,6 +107,16 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
         var user = await admin.GetByIdIncludingLockedAsync(id) ?? throw new AuthException("Tài khoản không tồn tại");
         user.IsActive = isActive;
         Audit(actorId, isActive ? "User.Unlock" : "User.Lock", id, new { user.Email });
+        await users.SaveChangesAsync();
+    }
+
+    // For when the verification email never arrives — Manager confirms the account by hand instead.
+    public async Task VerifyEmailAsync(int actorId, int id)
+    {
+        var user = await admin.GetByIdIncludingLockedAsync(id) ?? throw new AuthException("Tài khoản không tồn tại");
+        if (user.EmailVerified) throw new AuthException("Email đã được xác thực");
+        user.EmailVerified = true;
+        Audit(actorId, "User.VerifyEmailManual", id, new { user.Email });
         await users.SaveChangesAsync();
     }
 
@@ -127,5 +141,5 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
 
     private static UserListItem ToItem(User u) => new(
         u.Id, u.Email, u.FullName, u.Phone, u.Role, u.IsActive, u.CreatedAt,
-        u.CoachProfile?.Sports.Select(s => s.Name).ToArray() ?? []);
+        u.CoachProfile?.Sports.Select(s => s.Name).ToArray() ?? [], u.AvatarUrl, u.EmailVerified);
 }
