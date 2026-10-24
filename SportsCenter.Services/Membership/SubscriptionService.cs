@@ -57,9 +57,14 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             if (plan.SportId.HasValue && plan.Sport?.Status != SportStatus.Active &&
                 (plan.IncludesClasses || plan.PtSessionCredits > 0))
                 throw SchedulingException.Conflict("PLAN_SPORT_INACTIVE", "Bộ môn của gói đã ngừng hoạt động.");
-            if (await repo.HasPendingSubscriptionPaymentAsync(member.Id, plan.Id, token))
-                throw SchedulingException.Conflict("SUBSCRIPTION_PAYMENT_PENDING",
-                    "Đã có đơn thanh toán đang chờ cho gói này.");
+            var stalePayment = await repo.GetPendingSubscriptionPaymentAsync(member.Id, plan.Id, token);
+            if (stalePayment is not null)
+            {
+                stalePayment.Status = PaymentStatus.Failed;
+                if (stalePayment.Subscription is not null) stalePayment.Subscription.Status = SubscriptionStatus.Cancelled;
+                await repo.AddAuditAsync(actorId, "Payment.Superseded", nameof(Payment), stalePayment.Id,
+                    new { stalePayment.PayOsOrderCode, reason = "Tạo mã thanh toán mới cho cùng gói." }, token);
+            }
 
             var today = DateOnly.FromDateTime(clock.LocalNow);
             var latest = await repo.GetLatestSubscriptionAsync(member.Id, plan.Id, token);

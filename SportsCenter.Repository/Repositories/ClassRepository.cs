@@ -61,14 +61,15 @@ public class ClassRepository(AppDbContext db) : IClassRepository
     }
 
     public Task<List<Class>> ListFeaturedClassesAsync(DateOnly today, int count, CancellationToken ct) => db.Classes.AsNoTracking()
-        .Where(x => x.Status == ClassStatus.Open && x.EndDate >= today).Include(x => x.Sport).OrderBy(x => x.StartDate).Take(count).ToListAsync(ct);
+        .Where(x => x.Status == ClassStatus.Open && x.EndDate >= today).Include(x => x.Sport).Include(x => x.Room)
+        .OrderBy(x => x.StartDate).Take(count).ToListAsync(ct);
 
     public Task<List<Class>> ListPublicOpenClassesAsync(int? sportId, Level? level, DateOnly today, CancellationToken ct)
     {
         var query = db.Classes.AsNoTracking().Where(x => x.Status == ClassStatus.Open && x.EndDate >= today);
         if (sportId is { } s) query = query.Where(x => x.SportId == s);
         if (level is { } l) query = query.Where(x => x.Level == l);
-        return query.Include(x => x.Sport).OrderBy(x => x.StartDate).ToListAsync(ct);
+        return query.Include(x => x.Sport).Include(x => x.Room).OrderBy(x => x.StartDate).ToListAsync(ct);
     }
 
     public Task<Class?> GetClassAsync(int id, CancellationToken ct) => db.Classes.FirstOrDefaultAsync(x => x.Id == id, ct);

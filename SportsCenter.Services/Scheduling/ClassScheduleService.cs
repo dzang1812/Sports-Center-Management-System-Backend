@@ -7,15 +7,14 @@ namespace SportsCenter.Services.Scheduling;
 public record PagedResponse<T>(List<T> Items, int Total, int Page, int PageSize);
 public record ClassDto(int Id, string Name, int SportId, string Sport, int RoomId, string Room, int? CoachId,
     string? Coach, int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate, ClassStatus Status,
-    string? Description, List<string> ImageUrls);
+    string? Description);
 public record UpsertClassRequest(
     [param: Required, StringLength(150, MinimumLength = 2)] string Name,
     int SportId, int RoomId, int? CoachId,
     [param: Range(1, 10000)] int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate,
-    [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft,
-    [param: MaxLength(10)] List<string>? ImageUrls = null);
+    [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft);
 public record PublicClassDto(int Id, string Name, string Sport, Level Level, string? Description,
-    DateOnly StartDate, DateOnly EndDate, List<string> ImageUrls);
+    DateOnly StartDate, DateOnly EndDate, string? ImageUrl);
 public record AssignCoachRequest(int CoachId);
 public record GenerateSessionsRequest(DayOfWeek[] DaysOfWeek, TimeOnly StartTime, TimeOnly EndTime);
 public record GenerateSessionsResponse(int Created, int Existing, List<int> SessionIds);
@@ -68,7 +67,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     }
 
     private static PublicClassDto ToPublicClassDto(Class x) =>
-        new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.ImageUrls);
+        new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.Room.ImageUrl);
 
     public async Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct)
     {
@@ -85,7 +84,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             {
                 Name = request.Name.Trim(), Description = request.Description?.Trim(), SportId = sport.Id, RoomId = room.Id,
                 CoachId = request.CoachId, Capacity = request.Capacity, Level = request.Level, StartDate = request.StartDate,
-                EndDate = request.EndDate, Status = request.Status, ImageUrls = request.ImageUrls ?? [],
+                EndDate = request.EndDate, Status = request.Status,
             };
             classes.AddClass(entity);
             await transaction.SaveChangesAsync(token);
@@ -144,7 +143,6 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             entity.Name = request.Name.Trim(); entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
             entity.RoomId = room.Id; entity.Capacity = request.Capacity; entity.Level = request.Level;
             entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status;
-            entity.ImageUrls = request.ImageUrls ?? [];
             audit.AddAudit(actorId, "Class.Update", nameof(Class), id, request);
             await transaction.SaveChangesAsync(token);
             return await GetClassAsync(id, token);
@@ -363,7 +361,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     private static SessionConflict ToConflict(ResourceConflict x) => new(x.Date, x.StartTime, x.EndTime, x.Resource, x.ResourceId);
 
     private static ClassDto ToClassDto(Class x) => new(x.Id, x.Name, x.SportId, x.Sport.Name, x.RoomId, x.Room.Name, x.CoachId,
-        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.Description, x.ImageUrls);
+        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.Description);
 
     private static SessionDto ToSessionDto(ClassSession x, Class c, string sport, string room, string? coach, int booked) =>
         new(x.Id, c.Id, x.ClassName, c.SportId, sport, x.Level, x.Date, x.StartTime, x.EndTime, x.RoomId, room, x.CoachId, coach,

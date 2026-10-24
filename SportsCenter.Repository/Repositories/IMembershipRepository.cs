@@ -20,7 +20,7 @@ public interface IMembershipRepository
     Task<List<MemberSubscription>> ListSubscriptionsAsync(int memberId, CancellationToken ct);
     Task<Dictionary<int, PaymentStatus>> GetLatestPaymentStatusesAsync(IReadOnlyCollection<int> subscriptionIds,
         CancellationToken ct);
-    Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct);
+    Task<Payment?> GetPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct);
     Task AddSubscriptionAsync(MemberSubscription subscription, CancellationToken ct);
 
     Task AddPaymentAsync(Payment payment, CancellationToken ct);
