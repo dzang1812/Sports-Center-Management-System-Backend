@@ -14,6 +14,8 @@ public interface IClassRepository
 {
     // classes
     Task<(List<Class> Items, int Total)> ListClassesAsync(int page, int pageSize, CancellationToken ct);
+    Task<List<Class>> ListFeaturedClassesAsync(DateOnly today, int count, CancellationToken ct);
+    Task<List<Class>> ListPublicOpenClassesAsync(int? sportId, Level? level, DateOnly today, CancellationToken ct);
     Task<Class?> GetClassAsync(int id, CancellationToken ct);
     Task<Class> GetClassDetailAsync(int id, CancellationToken ct);
     Task<Class> GetClassWithRoomAndCoachAsync(int id, CancellationToken ct);
@@ -56,6 +58,17 @@ public class ClassRepository(AppDbContext db) : IClassRepository
         var items = await query.OrderBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Include(x => x.Sport).Include(x => x.Room).Include(x => x.Coach).ToListAsync(ct);
         return (items, total);
+    }
+
+    public Task<List<Class>> ListFeaturedClassesAsync(DateOnly today, int count, CancellationToken ct) => db.Classes.AsNoTracking()
+        .Where(x => x.Status == ClassStatus.Open && x.EndDate >= today).Include(x => x.Sport).OrderBy(x => x.StartDate).Take(count).ToListAsync(ct);
+
+    public Task<List<Class>> ListPublicOpenClassesAsync(int? sportId, Level? level, DateOnly today, CancellationToken ct)
+    {
+        var query = db.Classes.AsNoTracking().Where(x => x.Status == ClassStatus.Open && x.EndDate >= today);
+        if (sportId is { } s) query = query.Where(x => x.SportId == s);
+        if (level is { } l) query = query.Where(x => x.Level == l);
+        return query.Include(x => x.Sport).OrderBy(x => x.StartDate).ToListAsync(ct);
     }
 
     public Task<Class?> GetClassAsync(int id, CancellationToken ct) => db.Classes.FirstOrDefaultAsync(x => x.Id == id, ct);

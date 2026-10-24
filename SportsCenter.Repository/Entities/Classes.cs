@@ -37,6 +37,7 @@ public class Class
     public DateOnly EndDate { get; set; }
     public ClassStatus Status { get; set; } = ClassStatus.Draft;
     public int NotificationRevision { get; set; }
+    public List<string> ImageUrls { get; set; } = [];
     public List<ClassSession> Sessions { get; set; } = [];
     public List<ClassEnrollment> Enrollments { get; set; } = [];
 }
