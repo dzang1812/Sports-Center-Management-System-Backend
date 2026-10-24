@@ -14,7 +14,7 @@ public record UpsertClassRequest(
     [param: Range(1, 10000)] int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate,
     [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft);
 public record PublicClassDto(int Id, string Name, string Sport, Level Level, string? Description,
-    DateOnly StartDate, DateOnly EndDate, string? ImageUrl);
+    DateOnly StartDate, DateOnly EndDate, List<string> ImageUrls);
 public record AssignCoachRequest(int CoachId);
 public record GenerateSessionsRequest(DayOfWeek[] DaysOfWeek, TimeOnly StartTime, TimeOnly EndTime);
 public record GenerateSessionsResponse(int Created, int Existing, List<int> SessionIds);
@@ -67,7 +67,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     }
 
     private static PublicClassDto ToPublicClassDto(Class x) =>
-        new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.Room.ImageUrl);
+        new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.Room.ImageUrls);
 
     public async Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct)
     {

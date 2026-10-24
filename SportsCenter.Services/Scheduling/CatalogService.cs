@@ -9,11 +9,11 @@ public record UpsertSportRequest(
     [param: Required, StringLength(100, MinimumLength = 2)] string Name,
     [param: StringLength(500)] string? Description,
     bool HasClasses, bool HasPt, SportStatus Status = SportStatus.Active);
-public record RoomDto(int Id, string Name, int Capacity, RoomStatus Status, string? ImageUrl);
+public record RoomDto(int Id, string Name, int Capacity, RoomStatus Status, List<string> ImageUrls);
 public record UpsertRoomRequest(
     [param: Required, StringLength(100, MinimumLength = 2)] string Name,
     [param: Range(1, 10000)] int Capacity,
-    RoomStatus Status = RoomStatus.Active, string? ImageUrl = null);
+    RoomStatus Status = RoomStatus.Active, [param: MaxLength(10)] List<string>? ImageUrls = null);
 
 public interface ICatalogService
 {
@@ -80,7 +80,7 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
             var name = request.Name.Trim();
             if (await catalog.RoomNameExistsAsync(name, null, token))
                 throw SchedulingException.Conflict("ROOM_NAME_EXISTS", "Tên phòng đã tồn tại.");
-            var entity = new Room { Name = name, Capacity = request.Capacity, Status = request.Status, IsActive = request.Status == RoomStatus.Active, ImageUrl = request.ImageUrl };
+            var entity = new Room { Name = name, Capacity = request.Capacity, Status = request.Status, IsActive = request.Status == RoomStatus.Active, ImageUrls = request.ImageUrls ?? [] };
             catalog.AddRoom(entity);
             await transaction.SaveChangesAsync(token);
             audit.AddAudit(actorId, "Room.Create", nameof(Room), entity.Id, request);
@@ -101,7 +101,7 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
             if (await catalog.RoomCapacityInUseAsync(id, request.Capacity, token))
                 throw SchedulingException.Conflict("ROOM_CAPACITY_IN_USE", "Sức chứa mới nhỏ hơn sức chứa của lớp đang dùng phòng.");
             entity.Name = name; entity.Capacity = request.Capacity; entity.Status = request.Status;
-            entity.IsActive = request.Status == RoomStatus.Active; entity.ImageUrl = request.ImageUrl;
+            entity.IsActive = request.Status == RoomStatus.Active; entity.ImageUrls = request.ImageUrls ?? [];
             audit.AddAudit(actorId, "Room.Update", nameof(Room), id, request);
             await transaction.SaveChangesAsync(token);
             return ToDto(entity);
@@ -114,5 +114,5 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
     }
 
     private static SportDto ToDto(Sport x) => new(x.Id, x.Name, x.Description, x.HasClasses, x.HasPt, x.Status);
-    private static RoomDto ToDto(Room x) => new(x.Id, x.Name, x.Capacity, x.Status, x.ImageUrl);
+    private static RoomDto ToDto(Room x) => new(x.Id, x.Name, x.Capacity, x.Status, x.ImageUrls);
 }
