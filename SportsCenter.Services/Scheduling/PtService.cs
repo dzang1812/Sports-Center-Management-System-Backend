@@ -13,6 +13,10 @@ public record PtSlotDto(int CoachId, int SportId, DateOnly Date, TimeOnly StartT
 public record CreatePtBookingRequest(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, int? RoomId, int? MemberId);
 public record ReschedulePtBookingRequest(DateOnly Date, TimeOnly StartTime, int? RoomId);
 public record CancelPtBookingRequest([param: StringLength(500)] string? Reason);
+public record ManagerCancelPtBookingRequest([param: Required, StringLength(500, MinimumLength = 2)] string Reason);
+public record PtBookingListItem(int BookingId, int MemberId, string Member, int CoachId, string Coach,
+    int SportId, string Sport, DateOnly Date, TimeOnly StartTime, TimeOnly EndTime,
+    int? RoomId, string? Room, BookingStatus Status);
 public record PtBookingDto(int Id, int MemberId, int CoachId, int SportId, int? RoomId, int SubscriptionId,
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, BookingStatus Status, bool CreditRefunded, int PerformedByUserId,
     bool IsLateCancellation = false);
@@ -27,6 +31,9 @@ public interface IPtService
     Task CancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct);
     Task<PtBookingDto> RescheduleAsync(int actorId, int bookingId, ReschedulePtBookingRequest request, CancellationToken ct);
     Task CoachCancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct);
+    Task ManagerCancelAsync(int actorId, int bookingId, ManagerCancelPtBookingRequest request, CancellationToken ct);
+    Task<PagedResponse<PtBookingListItem>> ListBookingsAsync(int actorId, DateOnly? from, DateOnly? to,
+        int? memberId, int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct);
 }
 
 public sealed class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
@@ -34,6 +41,26 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
     ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options) : IPtService
 {
     private readonly SchedulingOptions settings = options.Value;
+
+    public async Task<PagedResponse<PtBookingListItem>> ListBookingsAsync(int actorId, DateOnly? from, DateOnly? to,
+        int? memberId, int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct)
+    {
+        await users.EnsureActiveActorAsync(actorId, UserRole.Manager, ct);
+        from ??= DateOnly.FromDateTime(clock.LocalNow);
+        to ??= from.Value.AddDays(30);
+        if (to < from || to.Value.DayNumber - from.Value.DayNumber > 180)
+            throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng lọc tối đa 180 ngày.");
+        if (status is { } state && !Enum.IsDefined(state))
+            throw new SchedulingException("INVALID_BOOKING_STATUS", "Trạng thái booking không hợp lệ.");
+        page = Math.Max(1, page);
+        pageSize = pageSize is 10 or 20 or 50 ? pageSize : 20;
+        if (page > int.MaxValue / pageSize)
+            throw new SchedulingException("INVALID_PAGE", "Trang vượt quá giới hạn cho phép.");
+        var (rows, total) = await pt.ListBookingsAsync(from.Value, to.Value, memberId, coachId, sportId, status, page, pageSize, ct);
+        return new(rows.Select(x => new PtBookingListItem(x.Id, x.MemberId, x.Member.FullName,
+            x.CoachId, x.Coach.FullName, x.SportId, x.Sport.Name, x.Date, x.StartTime, x.EndTime,
+            x.RoomId, x.Room?.Name, x.Status)).ToList(), total, page, pageSize);
+    }
 
     public async Task<List<AvailabilityItem>> GetAvailabilityAsync(int coachId, CancellationToken ct) =>
         (await pt.GetActiveAvailabilityAsync(coachId, ct))
@@ -188,6 +215,26 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
             CancelBooking(booking, actorId, request.Reason);
             await RefundOnceAsync(booking, token);
             AddPtCancellationEffects(actorId, booking, "PtBooking.CoachCancel", true);
+            return 0;
+        }, ct);
+    }
+
+    public async Task ManagerCancelAsync(int actorId, int bookingId, ManagerCancelPtBookingRequest request, CancellationToken ct)
+    {
+        await transaction.ExecuteAsync(async token =>
+        {
+            await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
+            var booking = await LoadAndLockBookingAsync(bookingId, token);
+            // Cancelled bookings of any origin stay unchanged: never refund a transferred/forfeited credit.
+            if (booking.Status == BookingStatus.Cancelled) return 0;
+            // Central cancellation always protects started/attended data, including in local test mode.
+            if (booking.Status != BookingStatus.Confirmed || booking.AttendanceFinalizedAt != null ||
+                clock.ToUtc(booking.Date, booking.StartTime) <= clock.UtcNow || await pt.HasAttendanceAsync(bookingId, token))
+                throw SchedulingException.Conflict("PT_ALREADY_OCCURRED", "Không thể hủy booking đã bắt đầu hoặc ghi nhận điểm danh.");
+            CancelBooking(booking, actorId, request.Reason);
+            booking.IsLateCancellation = false;
+            await RefundOnceAsync(booking, token);
+            AddPtCancellationEffects(actorId, booking, "PtBooking.ManagerCancel", booking.CreditRefunded);
             return 0;
         }, ct);
     }

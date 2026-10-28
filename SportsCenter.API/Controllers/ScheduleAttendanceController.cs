@@ -16,6 +16,16 @@ public sealed class MyScheduleController(IScheduleAttendanceService service) : C
         service.MemberCheckInAsync(UserId, sessionId, request, ct);
 }
 
+[ApiController, Authorize(Roles = "Receptionist,Manager"), Route("api/members/{memberId:int}/schedule")]
+public sealed class MemberScheduleForStaffController(IScheduleAttendanceService service) : ControllerBase
+{
+    private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    [HttpGet]
+    public Task<List<PersonalScheduleItem>> Get(int memberId, DateOnly from, DateOnly to,
+        bool includeCancelled = false, CancellationToken ct = default) =>
+        service.GetMemberScheduleForStaffAsync(ActorId, memberId, from, to, includeCancelled, ct);
+}
+
 [ApiController, Authorize(Roles = "Coach"), Route("api/coach/sessions")]
 public sealed class CoachSessionsController(IScheduleAttendanceService service) : ControllerBase
 {
