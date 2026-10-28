@@ -39,6 +39,7 @@ public interface IClassRepository
     Task<int?> GetSessionCoachIdAsync(int sessionId, CancellationToken ct);
     Task<List<ClassBooking>> GetConfirmedBookingsAsync(int sessionId, CancellationToken ct);
     Task<ClassSession?> GetSessionForBookingAsync(int sessionId, CancellationToken ct);
+    Task<bool> HasAnyAttendanceAsync(int sessionId, CancellationToken ct);
 
     // class bookings
     Task<bool> HasConfirmedBookingAsync(int sessionId, int memberId, CancellationToken ct);
@@ -153,6 +154,9 @@ public class ClassRepository(AppDbContext db) : IClassRepository
     public Task<ClassSession?> GetSessionForBookingAsync(int sessionId, CancellationToken ct) =>
         db.ClassSessions.Include(x => x.Room).Include(x => x.Coach).Include(x => x.Class).ThenInclude(x => x.Sport)
             .FirstOrDefaultAsync(x => x.Id == sessionId, ct);
+
+    public Task<bool> HasAnyAttendanceAsync(int sessionId, CancellationToken ct) =>
+        db.Attendances.AnyAsync(x => x.SessionId == sessionId, ct);
 
     public Task<bool> HasConfirmedBookingAsync(int sessionId, int memberId, CancellationToken ct) =>
         db.ClassBookings.AnyAsync(x => x.SessionId == sessionId && x.MemberId == memberId && x.Status == BookingStatus.Confirmed, ct);

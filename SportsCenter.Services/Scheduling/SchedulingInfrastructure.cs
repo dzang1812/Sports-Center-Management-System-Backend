@@ -39,6 +39,13 @@ public interface IAppClock
     DateTime ToUtc(DateOnly date, TimeOnly time);
 }
 
+public interface IFlow2TimeRules
+{
+    bool IsAvailable { get; }
+    bool EnforceTimeRules { get; }
+    bool TrySetEnforcement(bool enforceTimeRules);
+}
+
 public sealed class VietnamClock : IAppClock
 {
     private static readonly TimeZoneInfo Zone = FindZone();
@@ -73,9 +80,10 @@ public static class SchedulingRules
         firstDate == secondDate && firstStart < secondEnd && secondStart < firstEnd;
 
     public static bool SubscriptionCovers(SchedulingSubscriptionSnapshot subscription, int sportId, DateOnly activityDate,
-        bool needsClass = false, bool needsPt = false) =>
-        subscription.Status == SubscriptionStatus.Active &&
-        subscription.StartDate <= activityDate && activityDate <= subscription.EndDate &&
+        bool needsClass = false, bool needsPt = false, bool enforceTimeRules = true) =>
+        (subscription.Status == SubscriptionStatus.Active ||
+            (!enforceTimeRules && subscription.Status == SubscriptionStatus.Expired)) &&
+        (!enforceTimeRules || subscription.StartDate <= activityDate && activityDate <= subscription.EndDate) &&
         (subscription.SportId is null || subscription.SportId == sportId) &&
         !subscription.HasPendingPayment &&
         (!needsClass || subscription.IncludesClasses) &&

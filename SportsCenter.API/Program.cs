@@ -62,6 +62,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<IFlow2TimeRules, Flow2TimeRulesState>();
 
 // Closed by default (empty array = no cross-origin browser calls allowed). Set real origins per
 // environment: appsettings.Development.json for local FE dev, env var Cors__AllowedOrigins__0 on the

@@ -42,7 +42,7 @@ public interface IClassScheduleService
 
 public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepository catalog, IScheduleConflictRepository scheduleConflicts,
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
-    ISchedulingTransaction transaction, IAppClock clock) : IClassScheduleService
+    ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules) : IClassScheduleService
 {
     public async Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct)
     {
@@ -104,10 +104,15 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var entity = await classes.GetClassAsync(id, token)
                 ?? throw SchedulingException.NotFound("CLASS_NOT_FOUND", "Không tìm thấy lớp.");
             var (sport, room) = await ValidateSportRoomAsync(request.SportId, request.RoomId, request.Capacity, token);
-            var nameChanged = entity.Name != request.Name.Trim();
-            var levelChanged = entity.Level != request.Level;
-            var capacityChanged = entity.Capacity != request.Capacity;
-            var roomChanged = entity.RoomId != request.RoomId;
+            var oldName = entity.Name;
+            var oldLevel = entity.Level;
+            var oldCapacity = entity.Capacity;
+            var oldRoomId = entity.RoomId;
+            var requestedName = request.Name.Trim();
+            var nameChanged = oldName != requestedName;
+            var levelChanged = oldLevel != request.Level;
+            var capacityChanged = oldCapacity != request.Capacity;
+            var roomChanged = oldRoomId != request.RoomId;
             var localNow = clock.LocalNow;
             var today = DateOnly.FromDateTime(localNow);
             var timeNow = TimeOnly.FromDateTime(localNow);
@@ -120,14 +125,22 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (await classes.HasFutureSessionsOutsideRangeAsync(id, today, timeNow, request.StartDate, request.EndDate, token))
                 throw SchedulingException.Conflict("CLASS_DATE_EXCLUDES_SESSION", "Khoảng ngày mới loại bỏ buổi học đã tồn tại.");
             var futureSessions = await classes.GetFutureScheduledSessionsAsync(id, today, timeNow, true, token);
-            if (capacityChanged && futureSessions.Any(x => roomChanged ? room.Capacity < request.Capacity : x.Room.Capacity < request.Capacity))
+            if (futureSessions.Any(session =>
+                {
+                    var propagateCapacity = capacityChanged && session.Capacity == oldCapacity;
+                    var propagateRoom = roomChanged && session.RoomId == oldRoomId;
+                    if (!propagateCapacity && !propagateRoom) return false;
+                    var resultingCapacity = propagateCapacity ? request.Capacity : session.Capacity;
+                    var resultingRoomCapacity = propagateRoom ? room.Capacity : session.Room.Capacity;
+                    return resultingCapacity > resultingRoomCapacity;
+                }))
                 throw SchedulingException.Conflict("CAPACITY_EXCEEDS_SESSION_ROOM", "Sức chứa mới vượt quá phòng của một buổi tương lai.");
             if (request.CoachId is { } coachId && coachId != entity.CoachId)
                 throw new SchedulingException("USE_ASSIGN_COACH", "Dùng endpoint /api/classes/{id}/coach để đổi huấn luyện viên.");
             if (roomChanged && entity.CoachId is { } assignedCoachId)
             {
                 var conflicts = new List<SessionConflict>();
-                foreach (var session in futureSessions)
+                foreach (var session in futureSessions.Where(x => x.RoomId == oldRoomId))
                     conflicts.AddRange(await FindResourceConflictsAsync([session.Date], session.StartTime, session.EndTime,
                         request.RoomId, assignedCoachId, session.Id, token));
                 if (conflicts.Count != 0)
@@ -135,12 +148,12 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             }
             foreach (var session in futureSessions)
             {
-                if (nameChanged) session.ClassName = request.Name.Trim();
-                if (levelChanged) session.Level = request.Level;
-                if (capacityChanged) session.Capacity = request.Capacity;
-                if (roomChanged) session.RoomId = request.RoomId;
+                if (nameChanged && session.ClassName == oldName) session.ClassName = requestedName;
+                if (levelChanged && session.Level == oldLevel) session.Level = request.Level;
+                if (capacityChanged && session.Capacity == oldCapacity) session.Capacity = request.Capacity;
+                if (roomChanged && session.RoomId == oldRoomId) session.RoomId = request.RoomId;
             }
-            entity.Name = request.Name.Trim(); entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
+            entity.Name = requestedName; entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
             entity.RoomId = room.Id; entity.Capacity = request.Capacity; entity.Level = request.Level;
             entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status;
             audit.AddAudit(actorId, "Class.Update", nameof(Class), id, request);
@@ -173,7 +186,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
                 throw SchedulingException.Conflict("SCHEDULE_CHANGED", "Lớp vừa được thay đổi. Vui lòng thử lại.");
 
             var dates = Enumerable.Range(0, item.EndDate.DayNumber - item.StartDate.DayNumber + 1)
-                .Select(item.StartDate.AddDays).Where(x => request.DaysOfWeek.Contains(x.DayOfWeek) && clock.ToUtc(x, request.StartTime) > clock.UtcNow).ToList();
+                .Select(item.StartDate.AddDays).Where(x => request.DaysOfWeek.Contains(x.DayOfWeek) &&
+                    (!timeRules.EnforceTimeRules || clock.ToUtc(x, request.StartTime) > clock.UtcNow)).ToList();
             var existing = await classes.GetExistingSessionDatesAsync(classId, dates, request.StartTime, token);
             var candidates = dates.Except(existing).ToList();
             var conflicts = await FindResourceConflictsAsync(candidates, request.StartTime, request.EndTime, item.RoomId, coachId, null, token);
@@ -251,7 +265,10 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             await transaction.LockAsync(lockList, token);
             var session = await classes.GetSessionWithClassCoachAndRoomAsync(sessionId, token);
             if (session.Status != SessionStatus.Scheduled) throw SchedulingException.Conflict("SESSION_NOT_EDITABLE", "Chỉ sửa được buổi đang lên lịch.");
-            if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow || clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow)
+            if (session.AttendanceFinalizedAt != null || await classes.HasAnyAttendanceAsync(sessionId, token))
+                throw SchedulingException.Conflict("SESSION_ATTENDANCE_RECORDED", "Không thể sửa buổi đã ghi nhận điểm danh.");
+            if (timeRules.EnforceTimeRules && (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow ||
+                clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow))
                 throw SchedulingException.Conflict("SESSION_NOT_FUTURE", "Không thể sửa buổi đã diễn ra hoặc chuyển lịch về quá khứ.");
             if (request.Date < session.Class.StartDate || request.Date > session.Class.EndDate) throw new SchedulingException("DATE_OUTSIDE_CLASS", "Ngày nằm ngoài khoảng của lớp.");
             var room = await catalog.GetRoomAsync(request.RoomId, token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");
@@ -265,7 +282,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (conflicts.Count != 0) throw SchedulingException.Conflict("SESSION_MOVE_CONFLICT", "Lịch mới gây xung đột.", conflicts);
             var bookingSubscriptions = await subscriptions.ListForConfirmedClassBookingsAsync(sessionId, token);
             var invalidSubscription = bookingSubscriptions.Any(x =>
-                !SchedulingRules.SubscriptionCovers(x, session.Class.SportId, request.Date, needsClass: true));
+                !SchedulingRules.SubscriptionCovers(x, session.Class.SportId, request.Date,
+                    needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules));
             if (invalidSubscription) throw SchedulingException.Conflict("SESSION_MOVE_INVALIDATES_SUBSCRIPTION", "Ngày mới làm booking hiện hữu mất quyền gói.");
             session.Date = request.Date; session.StartTime = request.StartTime; session.EndTime = request.EndTime; session.RoomId = request.RoomId; session.Note = request.Note?.Trim();
             session.NotificationRevision++;
@@ -295,7 +313,9 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var session = await classes.GetSessionWithClassAsync(sessionId, token);
             if (session.Status == SessionStatus.Cancelled) return 0;
             if (session.Status == SessionStatus.Completed) throw SchedulingException.Conflict("SESSION_COMPLETED", "Không thể hủy buổi đã hoàn tất.");
-            if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow)
+            if (session.AttendanceFinalizedAt != null || await classes.HasAnyAttendanceAsync(sessionId, token))
+                throw SchedulingException.Conflict("SESSION_ATTENDANCE_RECORDED", "Không thể hủy buổi đã ghi nhận điểm danh.");
+            if (timeRules.EnforceTimeRules && clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow)
                 throw SchedulingException.Conflict("SESSION_ALREADY_OCCURRED", "Không thể hủy buổi đã diễn ra.");
             var bookings = await classes.GetConfirmedBookingsAsync(sessionId, token);
             session.Status = SessionStatus.Cancelled; session.CancelledAt = clock.UtcNow; session.CancelledByUserId = actorId; session.CancellationReason = request.Reason.Trim();

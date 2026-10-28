@@ -48,7 +48,7 @@ public interface IScheduleAttendanceService
 
 public sealed class ScheduleAttendanceService(IAttendanceRepository attendances, IScheduleUserRepository users,
     ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, ISchedulingTransaction transaction, IAppClock clock,
-    IOptions<SchedulingOptions> options) : IScheduleAttendanceService
+    IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options) : IScheduleAttendanceService
 {
     private readonly SchedulingOptions settings = options.Value;
     public async Task<List<PersonalScheduleItem>> GetPersonalScheduleAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct)
@@ -169,7 +169,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 ?? throw SchedulingException.Forbidden("CLASS_BOOKING_REQUIRED", "Bạn không có booking hiệu lực cho buổi này.");
             _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, token))
                 .FirstOrDefault(x => x.Id == booking.SubscriptionId &&
-                    SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date, needsClass: true))
+                    SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date,
+                        needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules))
                 ?? throw SchedulingException.Conflict("SUBSCRIPTION_NOT_ELIGIBLE", "Gói dùng đặt lớp không còn hiệu lực cho buổi học.");
             var existing = await attendances.GetClassAttendanceAsync(sessionId, memberId, token);
             if (existing is not null)
@@ -282,6 +283,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             throw SchedulingException.Conflict("SESSION_CANCELLED", "Không thể check-in buổi đã hủy.");
         if (session.Status != SessionStatus.Scheduled)
             throw SchedulingException.Conflict("SESSION_NOT_CHECK_IN_ELIGIBLE", "Buổi học không còn mở check-in.");
+        if (!timeRules.EnforceTimeRules) return;
         var opensAt = clock.ToUtc(session.Date, session.StartTime).AddMinutes(-settings.ClassCheckInOpensMinutesBefore);
         var closesAt = clock.ToUtc(session.Date, session.EndTime);
         if (clock.UtcNow < opensAt)
@@ -294,7 +296,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
     {
         if (session.CheckInCodeHash is null || session.CheckInCodeExpiresAt is null)
             throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_REQUIRED", "Buổi học chưa có mã check-in đang hoạt động.");
-        if (session.CheckInCodeExpiresAt <= clock.UtcNow)
+        if (timeRules.EnforceTimeRules && session.CheckInCodeExpiresAt <= clock.UtcNow)
             throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_EXPIRED", "Mã check-in đã hết hạn.");
         if (!CryptographicOperations.FixedTimeEquals(
                 Convert.FromHexString(session.CheckInCodeHash), Convert.FromHexString(HashCode(rawCode))))
@@ -338,6 +340,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
     private void ValidateAttendanceDay(DateOnly date, TimeOnly startTime, bool cancelled)
     {
         if (cancelled) throw SchedulingException.Conflict("SESSION_CANCELLED", "Không thể điểm danh buổi đã hủy.");
+        if (!timeRules.EnforceTimeRules) return;
         if (date != DateOnly.FromDateTime(clock.LocalNow)) throw SchedulingException.Conflict("ATTENDANCE_WRONG_DAY", "Chỉ được điểm danh trong ngày diễn ra theo giờ Việt Nam.");
         if (clock.ToUtc(date, startTime) > clock.UtcNow)
             throw SchedulingException.Conflict("ATTENDANCE_NOT_STARTED", "Chỉ được chốt điểm danh từ giờ bắt đầu buổi học.");
