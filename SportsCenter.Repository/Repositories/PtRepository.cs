@@ -21,6 +21,9 @@ public interface IPtRepository
     Task<List<BusySlot>> GetCoachPtBusyAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<PtBookingKey?> GetBookingKeyAsync(int bookingId, CancellationToken ct);
     Task<PtBooking> GetBookingAsync(int bookingId, CancellationToken ct);
+    Task<bool> HasAttendanceAsync(int bookingId, CancellationToken ct);
+    Task<(List<PtBooking> Items, int Total)> ListBookingsAsync(DateOnly from, DateOnly to, int? memberId,
+        int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct);
     void AddBooking(PtBooking booking);
 
 }
@@ -57,6 +60,24 @@ public class PtRepository(AppDbContext db) : IPtRepository
         .Select(x => new PtBookingKey(x.SportId, x.MemberId, x.CoachId)).FirstOrDefaultAsync(ct);
 
     public Task<PtBooking> GetBookingAsync(int bookingId, CancellationToken ct) => db.PtBookings.FirstAsync(x => x.Id == bookingId, ct);
+
+    public Task<bool> HasAttendanceAsync(int bookingId, CancellationToken ct) =>
+        db.Attendances.AnyAsync(x => x.PtBookingId == bookingId, ct);
+
+    public async Task<(List<PtBooking> Items, int Total)> ListBookingsAsync(DateOnly from, DateOnly to, int? memberId,
+        int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.PtBookings.AsNoTracking().Where(x => x.Date >= from && x.Date <= to);
+        if (memberId is { } member) query = query.Where(x => x.MemberId == member);
+        if (coachId is { } coach) query = query.Where(x => x.CoachId == coach);
+        if (sportId is { } sport) query = query.Where(x => x.SportId == sport);
+        if (status is { } state) query = query.Where(x => x.Status == state);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.Date).ThenBy(x => x.StartTime).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Include(x => x.Member).Include(x => x.Coach).Include(x => x.Sport).Include(x => x.Room).ToListAsync(ct);
+        return (items, total);
+    }
 
     public void AddBooking(PtBooking booking) => db.PtBookings.Add(booking);
 

@@ -35,6 +35,8 @@ public record ClassSelfCheckInResult(string ActorType, int SessionId, int UserId
 public interface IScheduleAttendanceService
 {
     Task<List<PersonalScheduleItem>> GetPersonalScheduleAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct);
+    Task<List<PersonalScheduleItem>> GetMemberScheduleForStaffAsync(int actorId, int memberId, DateOnly from,
+        DateOnly to, bool includeCancelled, CancellationToken ct);
     Task<AttendanceHistoryResponse> GetAttendanceHistoryAsync(int memberId, int year, int month, CancellationToken ct);
     Task<List<CoachScheduleItem>> GetCoachScheduleAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<List<RosterItem>> GetClassRosterAsync(int coachId, int sessionId, CancellationToken ct);
@@ -55,6 +57,27 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
     {
         ValidateRange(from, to, 180);
         await EnsureMemberAsync(memberId, ct);
+        return await ReadMemberScheduleAsync(memberId, from, to, includeCancelled, ct);
+    }
+
+    public async Task<List<PersonalScheduleItem>> GetMemberScheduleForStaffAsync(int actorId, int memberId, DateOnly from,
+        DateOnly to, bool includeCancelled, CancellationToken ct)
+    {
+        if (from == default || to == default)
+            throw new SchedulingException("INVALID_DATE_RANGE", "Phải truyền from và to hợp lệ.");
+        ValidateRange(from, to, 180);
+        var actor = await users.GetUserAsync(actorId, ct);
+        if (actor is not { IsActive: true } || actor.Role is not (UserRole.Manager or UserRole.Receptionist))
+            throw SchedulingException.Forbidden("ROLE_NOT_ALLOWED", "Vai trò không được xem lịch hội viên.");
+        var member = await users.GetUserAsync(memberId, ct);
+        if (member?.Role != UserRole.Member)
+            throw SchedulingException.NotFound("MEMBER_NOT_FOUND", "Không tìm thấy hội viên.");
+        return await ReadMemberScheduleAsync(memberId, from, to, includeCancelled, ct);
+    }
+
+    private async Task<List<PersonalScheduleItem>> ReadMemberScheduleAsync(int memberId, DateOnly from, DateOnly to,
+        bool includeCancelled, CancellationToken ct)
+    {
         var classBookings = await attendances.GetMemberClassBookingsAsync(memberId, from, to, includeCancelled, ct);
         var ptBookings = await attendances.GetMemberPtBookingsAsync(memberId, from, to, includeCancelled, ct);
         var classAttendance = await attendances.GetClassAttendanceMapAsync(memberId, classBookings.Select(x => x.SessionId).ToList(), ct);

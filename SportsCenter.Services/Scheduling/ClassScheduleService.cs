@@ -220,6 +220,9 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var today = DateOnly.FromDateTime(localNow);
             var timeNow = TimeOnly.FromDateTime(localNow);
             var sessions = await classes.GetFutureScheduledSessionsAsync(classId, today, timeNow, false, token);
+            var affectedMembers = new HashSet<int>();
+            foreach (var session in sessions.Where(x => x.CoachId != request.CoachId))
+                affectedMembers.UnionWith(await classes.GetConfirmedMemberIdsAsync(session.Id, token));
             var conflicts = await FindCoachConflictsAsync(request.CoachId, sessions, token);
             if (conflicts.Count != 0) throw SchedulingException.Conflict("COACH_SCHEDULE_CONFLICT", "Huấn luyện viên bị trùng lịch.", conflicts);
             var previousCoachId = item.CoachId;
@@ -232,6 +235,11 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (previousCoachId is { } oldCoachId && oldCoachId != request.CoachId)
                 notifications.AddNotification(oldCoachId, actorId, NotificationType.ScheduleChange, "Thay đổi phân công lớp",
                     $"Bạn không còn được phân công lớp {item.Name}.", $"class:{classId}:coach-revision:{item.NotificationRevision}:removed:{oldCoachId}");
+            // One notification per affected member per assignment revision, even across multiple sessions.
+            foreach (var memberId in affectedMembers)
+                notifications.AddNotification(memberId, actorId, NotificationType.ScheduleChange, "Thay đổi huấn luyện viên",
+                    $"Huấn luyện viên của các buổi bạn đã đặt trong lớp {item.Name} đã thay đổi.",
+                    $"class:{classId}:coach-revision:{item.NotificationRevision}:member:{memberId}");
             await transaction.SaveChangesAsync(token);
             return await GetClassAsync(classId, token);
         }, ct);
