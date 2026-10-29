@@ -10,7 +10,7 @@ public record CoachSessionRow(ClassSession Session, string Sport, string Room, i
     AttendanceStatus? CoachAttendanceStatus, DateTime? CoachCheckedInAt);
 public record RosterRow(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus? Status,
     DateOnly Date, TimeOnly EndTime, DateTime? CheckedInAt, AttendanceSource? Source, bool LegacyFinalized);
-public record ClassCheckInBookingRow(int BookingId, int SubscriptionId, int SportId);
+public record ClassCheckInBookingRow(int BookingId, int? SubscriptionId, int SportId);
 
 // Schedules and attendance reads/writes (ATT-01, BK-03, CLS-06).
 public interface IAttendanceRepository
@@ -112,7 +112,7 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
 
     public Task<ClassCheckInBookingRow?> FindConfirmedClassBookingAsync(int sessionId, int memberId, CancellationToken ct) =>
         db.ClassBookings.AsNoTracking()
-            .Where(x => x.SessionId == sessionId && x.MemberId == memberId && x.Status == BookingStatus.Confirmed)
+            .Where(x => x.SessionId == sessionId && x.MemberId == memberId && x.Status == BookingStatus.Confirmed && (x.EnrollmentId == null || x.Enrollment!.Status == EnrollmentStatus.Confirmed))
             .Select(x => new ClassCheckInBookingRow(x.Id, x.SubscriptionId, x.Session.Class.SportId))
             .FirstOrDefaultAsync(ct);
 

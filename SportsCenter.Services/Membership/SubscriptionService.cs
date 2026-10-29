@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SportsCenter.Services.Payments;
 using Microsoft.Extensions.Options;
 using PayOS;
 using PayOS.Models.V2.PaymentRequests;
@@ -16,15 +17,16 @@ public record SubscribeRequest([param: Required, Range(1, int.MaxValue)] int Pla
 public record SubscriptionDto(int Id, int MemberId, int PlanId, string PlanName, DateOnly StartDate, DateOnly EndDate,
     SubscriptionStatus Status, int RemainingPtSessions, bool IncludesGymAccess, string PlanType, int TotalPtSessions,
     int RemainingDays, bool IncludesClasses, int? SportId, string? SportName,
-    IReadOnlyList<PlanSportDto> AllowedSports, PaymentStatus? PaymentStatus);
+    IReadOnlyList<PlanSportDto> AllowedSports, PaymentStatus? PaymentStatus, int? PurchaseOrderId = null);
 
 // Covers both pending checkout and settled invoice; clients branch on Status.
 public record PaymentDto(int Id, int MemberId, string MemberName, int? SubscriptionId, string? PlanName,
     decimal Amount, PaymentMethod Method, PaymentStatus Status, string? InvoiceNumber, DateTime PaidAt,
-    string? CheckoutUrl, string? QrCode, string? ReceivedByName);
+    string? CheckoutUrl, string? QrCode, string? ReceivedByName, PaymentPurpose Purpose = PaymentPurpose.LegacySubscription);
 
 public interface ISubscriptionService
 {
+    Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct);
     Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct);
     Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct);
     Task<PaymentDto> GetPaymentAsync(int actorId, int paymentId, CancellationToken ct);
@@ -35,8 +37,39 @@ public interface ISubscriptionService
 }
 
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
-    ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions) : ISubscriptionService
+    ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions, WalletService wallet) : ISubscriptionService
 {
+    public async Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct)
+    {
+        var paymentId = await wallet.ExecuteAsync(actorId, "online-top-up", key, request, async token =>
+        {
+            var member = await wallet.TargetAsync(actorId, null, true, token);
+            WalletService.ValidateMoney(request.Amount);
+            await transaction.LockAsync([new(ScheduleResourceType.Member, member)], token);
+            var payment = new Payment { MemberId = member, Amount = request.Amount, Purpose = PaymentPurpose.WalletTopUp, Method = PaymentMethod.BankTransfer };
+            await repo.AddPaymentAsync(payment, token); await transaction.SaveChangesAsync(token);
+            payment.PayOsOrderCode = payment.Id;
+            return payment.Id;
+        }, ct);
+        return await AttachCheckoutLinkAsync(paymentId, ct);
+    }
+
+    private async Task<PaymentDto> AttachCheckoutLinkAsync(int paymentId, CancellationToken ct)
+    {
+        var pending = await repo.GetPaymentWithDetailsAsync(paymentId, ct)
+            ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch.");
+        if (pending.Status != PaymentStatus.Pending || pending.CheckoutUrl != null)
+            return ToPaymentDto(pending, pending.Member, pending.Subscription?.Plan.Name);
+        // No DB transaction across the provider call. The committed Pending row/order is reused on retry.
+        var link = await CreatePayOsLinkAsync(pending, ct);
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([new(ScheduleResourceType.Member, pending.MemberId)], token);
+            pending.CheckoutUrl = link.CheckoutUrl; pending.QrCode = link.QrCode; pending.PayOsPaymentLinkId = link.PaymentLinkId;
+            return ToPaymentDto(pending, pending.Member, pending.Subscription?.Plan.Name);
+        }, ct);
+    }
+
     public async Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct)
     {
         var (actor, member) = await ResolveSubscribeTargetAsync(actorId, request.MemberId);
@@ -47,19 +80,23 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             throw SchedulingException.Forbidden("COUNTER_PAYMENT_REQUIRES_RECEPTIONIST",
                 "Chỉ lễ tân được tạo thanh toán tiền mặt hoặc thẻ tại quầy.");
 
-        return await transaction.ExecuteAsync(async token =>
+        var draft = await transaction.ExecuteAsync(async token =>
         {
             await transaction.LockAsync([new(ScheduleResourceType.Member, member.Id)], token);
             var plan = await repo.GetPlanAsync(request.PlanId, token)
                 ?? throw SchedulingException.NotFound("PLAN_NOT_FOUND", "Không tìm thấy gói thành viên.");
+            if (plan.WalletPtPackage) throw SchedulingException.Conflict("USE_WALLET_PT_PACKAGE", "Gói PT mới thanh toán bằng số dư; chọn mua gói PT trong màn số dư.");
             if (!plan.IsActive)
                 throw SchedulingException.Conflict("PLAN_INACTIVE", "Gói thành viên đã ngừng bán.");
             if (plan.SportId.HasValue && plan.Sport?.Status != SportStatus.Active &&
                 (plan.IncludesClasses || plan.PtSessionCredits > 0))
                 throw SchedulingException.Conflict("PLAN_SPORT_INACTIVE", "Bộ môn của gói đã ngừng hoạt động.");
-            if (await repo.HasPendingSubscriptionPaymentAsync(member.Id, plan.Id, token))
-                throw SchedulingException.Conflict("SUBSCRIPTION_PAYMENT_PENDING",
-                    "Đã có đơn thanh toán đang chờ cho gói này.");
+            var pending = await repo.FindPendingSubscriptionPaymentAsync(member.Id, plan.Id, token);
+            if (pending != null)
+            {
+                if (pending.Method != method) throw SchedulingException.Conflict("SUBSCRIPTION_PAYMENT_PENDING", "Đã có thanh toán chờ với phương thức khác.");
+                return ToPaymentDto(pending, member, plan.Name);
+            }
 
             var today = DateOnly.FromDateTime(clock.LocalNow);
             var latest = await repo.GetLatestSubscriptionAsync(member.Id, plan.Id, token);
@@ -89,18 +126,13 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             await transaction.SaveChangesAsync(token);
 
             payment.PayOsOrderCode = payment.Id;
-            if (method == PaymentMethod.BankTransfer)
-            {
-                var link = await CreatePayOsLinkAsync(payment, token);
-                payment.PayOsPaymentLinkId = link.PaymentLinkId;
-                payment.CheckoutUrl = link.CheckoutUrl;
-                payment.QrCode = link.QrCode;
-            }
 
             await repo.AddAuditAsync(actorId, "Subscription.Create", nameof(MemberSubscription), subscription.Id,
                 new { memberId = member.Id, planId = plan.Id, subscription.StartDate, subscription.EndDate, payment.Amount }, token);
             return ToPaymentDto(payment, member, plan.Name);
         }, ct);
+        return draft.Method == PaymentMethod.BankTransfer && draft.Status == PaymentStatus.Pending && draft.CheckoutUrl == null
+            ? await AttachCheckoutLinkAsync(draft.Id, ct) : draft;
     }
 
     public async Task<PaymentDto> ConfirmCounterPaymentAsync(int actorId, int paymentId, CancellationToken ct)
@@ -175,8 +207,15 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             var payment = await repo.GetPaymentByOrderCodeAsync(data.OrderCode, token);
             if (payment is null || payment.Status != PaymentStatus.Pending) return 0;
 
+            if (webhook.Success != (data.Code == "00")) throw new SchedulingException("PAYMENT_VERIFICATION_MISMATCH", "Trạng thái webhook không khớp dữ liệu đã ký.");
             if (webhook.Success)
+            {
+                if (data.Amount != payment.Amount || data.Currency != "VND" || data.OrderCode != payment.PayOsOrderCode || string.IsNullOrWhiteSpace(data.Reference) ||
+                    payment.PayOsPaymentLinkId != null && data.PaymentLinkId != payment.PayOsPaymentLinkId)
+                    throw new SchedulingException("PAYMENT_VERIFICATION_MISMATCH", "Số tiền/tiền tệ/order/reference không khớp.");
+                payment.ProviderReference = "payos:" + data.Reference;
                 await ConfirmPaymentAsync(payment, payment.MemberId, data.Reference, token);
+            }
             else
             {
                 payment.Status = PaymentStatus.Failed;
@@ -207,7 +246,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             ReturnUrl = $"{baseUrl}/payment/success?paymentId={payment.Id}",
             CancelUrl = $"{baseUrl}/payment/cancel?paymentId={payment.Id}",
         };
-        try { return await payOs.PaymentRequests.CreateAsync(request); }
+        try { return await payOs.PaymentRequests.CreateAsync(request, new PayOS.Models.RequestOptions<CreatePaymentLinkRequest> { CancellationToken = ct }); }
         catch (Exception)
         {
             throw new SchedulingException("PAYOS_LINK_FAILED",
@@ -219,8 +258,13 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
     {
         payment.Status = PaymentStatus.Paid;
         payment.PaidAt = clock.UtcNow;
-        payment.InvoiceNumber = $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
-        if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Active;
+        payment.InvoiceNumber = payment.Purpose == PaymentPurpose.WalletTopUp ? $"WAL-{payment.Id:D8}" : $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
+        if (payment.Purpose == PaymentPurpose.WalletTopUp)
+        {
+            if (payment.SubscriptionId != null) throw SchedulingException.Conflict("PAYMENT_PURPOSE_MISMATCH", "Yêu cầu nạp không được kích hoạt gói.");
+            await wallet.MoveAsync(payment.MemberId, actorId, payment.Amount, "OnlineTopUp", $"payment:{payment.Id}:credit", null, payment.Id, ct);
+        }
+        else if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Active;
         await repo.AddAuditAsync(actorId, "Payment.Confirmed", nameof(Payment), payment.Id,
             new { payment.PayOsOrderCode, Reference = reference }, ct);
     }
@@ -290,12 +334,15 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return new SubscriptionDto(subscription.Id, subscription.MemberId, subscription.PlanId, subscription.Plan.Name,
             subscription.StartDate, subscription.EndDate, status, subscription.RemainingPtSessions,
             subscription.IncludesGymAccess, MembershipPlanPresentation.GetPlanType(subscription.Plan),
-            subscription.Plan.PtSessionCredits, remainingDays, subscription.Plan.IncludesClasses,
-            subscription.Plan.SportId, subscription.Plan.Sport?.Name, allowedSports, paymentStatus);
+            subscription.SnapshotPtCredits ?? subscription.Plan.PtSessionCredits, remainingDays, subscription.PurchaseOrderId == null && subscription.Plan.IncludesClasses,
+            subscription.PurchaseOrderId != null ? subscription.SnapshotSportId : subscription.Plan.SportId,
+            subscription.PurchaseOrderId != null ? sports.FirstOrDefault(x => x.Id == subscription.SnapshotSportId)?.Name : subscription.Plan.Sport?.Name,
+            subscription.PurchaseOrderId != null ? sports.Where(x => subscription.SnapshotSportId == null || x.Id == subscription.SnapshotSportId).Select(x => new PlanSportDto(x.Id, x.Name)).ToList() : allowedSports,
+            paymentStatus, subscription.PurchaseOrderId);
     }
 
     private static PaymentDto ToPaymentDto(Payment payment, User member, string? planName) =>
         new(payment.Id, payment.MemberId, member.FullName, payment.SubscriptionId, planName, payment.Amount,
             payment.Method, payment.Status, payment.InvoiceNumber, payment.PaidAt, payment.CheckoutUrl,
-            payment.QrCode, payment.ReceivedBy?.FullName);
+            payment.QrCode, payment.ReceivedBy?.FullName, payment.Purpose);
 }

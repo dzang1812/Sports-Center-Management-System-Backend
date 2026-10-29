@@ -10,6 +10,7 @@ public class MembershipPlan
     public int DurationMonths { get; set; }
     public decimal Price { get; set; } // "học phí"
     public bool IsActive { get; set; } = true;
+    public bool WalletPtPackage { get; set; }
     public int? SportId { get; set; }
     public Sport? Sport { get; set; }
     public bool IncludesClasses { get; set; }
@@ -20,6 +21,12 @@ public class MembershipPlan
 
 public class MemberSubscription
 {
+    public int? PurchaseOrderId { get; set; }
+    public CommerceOrder? PurchaseOrder { get; set; }
+    public int? SnapshotPtCredits { get; set; }
+    public int? SnapshotSportId { get; set; }
+    public int? SnapshotCoachId { get; set; }
+    public bool EverUsedPtCredit { get; set; }
     public int Id { get; set; }
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;
@@ -36,6 +43,8 @@ public class MemberSubscription
 // Status starts Pending at link creation; the PayOS webhook flips it to Paid/Failed (see SubscriptionService).
 public class Payment
 {
+    public PaymentPurpose Purpose { get; set; }
+    public string? ProviderReference { get; set; }
     public int Id { get; set; }
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;

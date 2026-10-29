@@ -8,6 +8,7 @@ public class Sport
     public string? Description { get; set; }
     public bool HasClasses { get; set; }
     public bool HasPt { get; set; }
+    public decimal? PtSinglePrice { get; set; }
     public SportStatus Status { get; set; } = SportStatus.Active;
 }
 
@@ -36,6 +37,12 @@ public class Class
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public ClassStatus Status { get; set; } = ClassStatus.Draft;
+    public ClassBookingMode BookingMode { get; set; }
+    public decimal CourseFee { get; set; }
+    public int ExpectedSessions { get; set; }
+    public DateTime? EnrollmentClosesAt { get; set; }
+    public DateTime? PublishedAt { get; set; }
+    public DateTime? CourseStartsAt { get; set; }
     public int NotificationRevision { get; set; }
     public List<ClassSession> Sessions { get; set; } = [];
     public List<ClassEnrollment> Enrollments { get; set; } = [];
@@ -43,6 +50,8 @@ public class Class
 
 public class ClassSession
 {
+    public int? ReplacesSessionId { get; set; }
+    public ClassSession? ReplacesSession { get; set; }
     public int Id { get; set; }
     public int ClassId { get; set; }
     public Class Class { get; set; } = null!;
@@ -76,6 +85,8 @@ public class ClassSession
 
 public class ClassBooking
 {
+    public int? EnrollmentId { get; set; }
+    public ClassEnrollment? Enrollment { get; set; }
     public int Id { get; set; }
     public int SessionId { get; set; }
     public ClassSession Session { get; set; } = null!;
@@ -83,8 +94,8 @@ public class ClassBooking
     public User Member { get; set; } = null!;
     public int PerformedByUserId { get; set; }
     public User PerformedByUser { get; set; } = null!;
-    public int SubscriptionId { get; set; }
-    public MemberSubscription Subscription { get; set; } = null!;
+    public int? SubscriptionId { get; set; }
+    public MemberSubscription? Subscription { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.Confirmed;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CancelledAt { get; set; }
@@ -110,6 +121,10 @@ public class CoachAvailability
 
 public class PtBooking
 {
+    public PtFundingSource FundingSource { get; set; }
+    public int? FundingOrderId { get; set; }
+    public CommerceOrder? FundingOrder { get; set; }
+    public bool FundingTransferred { get; set; }
     public int Id { get; set; }
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;
@@ -119,8 +134,8 @@ public class PtBooking
     public Sport Sport { get; set; } = null!;
     public int? RoomId { get; set; }
     public Room? Room { get; set; }
-    public int SubscriptionId { get; set; }
-    public MemberSubscription Subscription { get; set; } = null!;
+    public int? SubscriptionId { get; set; }
+    public MemberSubscription? Subscription { get; set; }
     public int PerformedByUserId { get; set; }
     public User PerformedByUser { get; set; } = null!;
     public DateOnly Date { get; set; }
@@ -140,7 +155,7 @@ public class PtBooking
     public User? AttendanceFinalizedByUser { get; set; }
 }
 
-public class ClassEnrollment // legacy class-level enrollment retained for compatibility
+public class ClassEnrollment // Legacy rows keep OrderId null; paid courses reuse this entity.
 {
     public int Id { get; set; }
     public int ClassId { get; set; }
@@ -148,6 +163,8 @@ public class ClassEnrollment // legacy class-level enrollment retained for compa
     public int MemberId { get; set; }
     public User Member { get; set; } = null!;
     public EnrollmentStatus Status { get; set; } = EnrollmentStatus.Enrolled;
+    public int? OrderId { get; set; }
+    public CommerceOrder? Order { get; set; }
     public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
     public DateTime? CancelledAt { get; set; }
 }

@@ -256,17 +256,36 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BookingMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("LegacySession");
+
                     b.Property<int>("Capacity")
                         .HasColumnType("integer");
 
                     b.Property<int?>("CoachId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("CourseFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("CourseStartsAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<DateTime?>("EnrollmentClosesAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExpectedSessions")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Level")
                         .IsRequired()
@@ -278,6 +297,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<int>("NotificationRevision")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("RoomId")
                         .HasColumnType("integer");
@@ -328,6 +350,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("EnrollmentId")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsLateCancellation")
                         .HasColumnType("boolean");
 
@@ -344,12 +369,14 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("SubscriptionId")
+                    b.Property<int?>("SubscriptionId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("EnrollmentId");
 
                     b.HasIndex("MemberId");
 
@@ -361,7 +388,10 @@ namespace SportsCenter.Repository.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" = 'Confirmed'");
 
-                    b.ToTable("ClassBookings");
+                    b.ToTable("ClassBookings", t =>
+                        {
+                            t.HasCheckConstraint("CK_ClassBooking_Source", "(\"SubscriptionId\" IS NOT NULL) <> (\"EnrollmentId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.ClassEnrollment", b =>
@@ -384,6 +414,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int>("MemberId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -391,6 +424,8 @@ namespace SportsCenter.Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("OrderId");
 
                     b.HasIndex("ClassId", "MemberId")
                         .IsUnique();
@@ -466,6 +501,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int>("NotificationRevision")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ReplacesSessionId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RoomId")
                         .HasColumnType("integer");
 
@@ -485,6 +523,10 @@ namespace SportsCenter.Repository.Migrations
                     b.HasIndex("CheckInCodeIssuedByUserId");
 
                     b.HasIndex("CoachId");
+
+                    b.HasIndex("ReplacesSessionId")
+                        .IsUnique()
+                        .HasFilter("\"ReplacesSessionId\" IS NOT NULL");
 
                     b.HasIndex("RoomId");
 
@@ -591,6 +633,128 @@ namespace SportsCenter.Repository.Migrations
                         {
                             t.HasCheckConstraint("CK_CoachSessionAttendance_Status", "\"Status\" IN ('Present', 'Late')");
                         });
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CommerceOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("MemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("MemberId");
+
+                    b.ToTable("CommerceOrders", t =>
+                        {
+                            t.HasCheckConstraint("CK_Order_Refund", "\"PaidAmount\" > 0 AND \"RefundedAmount\" >= 0 AND \"RefundedAmount\" <= \"PaidAmount\"");
+                        });
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CommerceRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId", "Operation", "Key")
+                        .IsUnique();
+
+                    b.ToTable("CommerceRequests");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CourseEntitlement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CurrentSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EnrollmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OriginalSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Refunded")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentSessionId");
+
+                    b.HasIndex("EnrollmentId");
+
+                    b.HasIndex("OriginalSessionId");
+
+                    b.HasIndex("OrderId", "OriginalSessionId")
+                        .IsUnique();
+
+                    b.ToTable("CourseEntitlements");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>
@@ -710,6 +874,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("EverUsedPtCredit")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IncludesGymAccess")
                         .HasColumnType("boolean");
 
@@ -719,7 +886,19 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int>("PlanId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("PurchaseOrderId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RemainingPtSessions")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SnapshotCoachId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SnapshotPtCredits")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SnapshotSportId")
                         .HasColumnType("integer");
 
                     b.Property<DateOnly>("StartDate")
@@ -735,9 +914,30 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasIndex("PlanId");
 
+                    b.HasIndex("PurchaseOrderId")
+                        .IsUnique()
+                        .HasFilter("\"PurchaseOrderId\" IS NOT NULL");
+
                     b.ToTable("MemberSubscriptions", t =>
                         {
                             t.HasCheckConstraint("CK_MemberSubscription_RemainingPt", "\"RemainingPtSessions\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.MemberWallet", b =>
+                {
+                    b.Property<int>("MemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Balance")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("MemberId");
+
+                    b.ToTable("MemberWallets", t =>
+                        {
+                            t.HasCheckConstraint("CK_Wallet_Nonnegative", "\"Balance\" >= 0 AND \"Balance\" = trunc(\"Balance\")");
                         });
                 });
 
@@ -783,6 +983,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<int?>("SportId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("WalletPtPackage")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -880,6 +1083,15 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("PayOsPaymentLinkId")
                         .HasColumnType("text");
 
+                    b.Property<string>("ProviderReference")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("LegacySubscription");
+
                     b.Property<string>("QrCode")
                         .HasColumnType("text");
 
@@ -902,6 +1114,10 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasIndex("PayOsOrderCode")
                         .IsUnique();
+
+                    b.HasIndex("ProviderReference")
+                        .IsUnique()
+                        .HasFilter("\"ProviderReference\" IS NOT NULL");
 
                     b.HasIndex("ReceivedById");
 
@@ -984,6 +1200,18 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<TimeOnly>("EndTime")
                         .HasColumnType("time without time zone");
 
+                    b.Property<int?>("FundingOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FundingSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("LegacyCredit");
+
+                    b.Property<bool>("FundingTransferred")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsLateCancellation")
                         .HasColumnType("boolean");
 
@@ -1006,7 +1234,7 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("SubscriptionId")
+                    b.Property<int?>("SubscriptionId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -1014,6 +1242,8 @@ namespace SportsCenter.Repository.Migrations
                     b.HasIndex("AttendanceFinalizedByUserId");
 
                     b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("FundingOrderId");
 
                     b.HasIndex("MemberId");
 
@@ -1025,6 +1255,10 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasIndex("SubscriptionId");
 
+                    b.HasIndex("FundingOrderId", "Status")
+                        .IsUnique()
+                        .HasFilter("\"FundingOrderId\" IS NOT NULL AND \"Status\" = 'Confirmed'");
+
                     b.HasIndex("CoachId", "Date", "StartTime")
                         .IsUnique()
                         .HasFilter("\"Status\" = 'Confirmed'");
@@ -1032,6 +1266,8 @@ namespace SportsCenter.Repository.Migrations
                     b.ToTable("PtBookings", t =>
                         {
                             t.HasCheckConstraint("CK_PtBooking_OneHour", "\"EndTime\" = \"StartTime\" + interval '1 hour'");
+
+                            t.HasCheckConstraint("CK_PtBooking_Source", "(\"FundingSource\" = 'Wallet' AND \"SubscriptionId\" IS NULL AND \"FundingOrderId\" IS NOT NULL) OR (\"FundingSource\" <> 'Wallet' AND \"SubscriptionId\" IS NOT NULL)");
                         });
                 });
 
@@ -1088,6 +1324,10 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal?>("PtSinglePrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1338,6 +1578,65 @@ namespace SportsCenter.Repository.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("SportsCenter.Repository.Entities.WalletEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("MemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.ToTable("WalletEntries", t =>
+                        {
+                            t.HasCheckConstraint("CK_WalletEntry_Vnd", "\"Amount\" <> 0 AND \"Amount\" = trunc(\"Amount\") AND \"BalanceAfter\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("CoachProfileSport", b =>
                 {
                     b.HasOne("SportsCenter.Repository.Entities.CoachProfile", null)
@@ -1499,6 +1798,11 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("CancelledByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SportsCenter.Repository.Entities.ClassEnrollment", "Enrollment")
+                        .WithMany()
+                        .HasForeignKey("EnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "Member")
                         .WithMany()
                         .HasForeignKey("MemberId")
@@ -1520,10 +1824,11 @@ namespace SportsCenter.Repository.Migrations
                     b.HasOne("SportsCenter.Repository.Entities.MemberSubscription", "Subscription")
                         .WithMany()
                         .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CancelledByUser");
+
+                    b.Navigation("Enrollment");
 
                     b.Navigation("Member");
 
@@ -1548,9 +1853,16 @@ namespace SportsCenter.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.CommerceOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Class");
 
                     b.Navigation("Member");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.ClassSession", b =>
@@ -1581,6 +1893,11 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("CoachId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SportsCenter.Repository.Entities.ClassSession", "ReplacesSession")
+                        .WithMany()
+                        .HasForeignKey("ReplacesSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.Room", "Room")
                         .WithMany()
                         .HasForeignKey("RoomId")
@@ -1596,6 +1913,8 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("Class");
 
                     b.Navigation("Coach");
+
+                    b.Navigation("ReplacesSession");
 
                     b.Navigation("Room");
                 });
@@ -1649,6 +1968,60 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CommerceOrder", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Member");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CourseEntitlement", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.ClassSession", "CurrentSession")
+                        .WithMany()
+                        .HasForeignKey("CurrentSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.ClassEnrollment", "Enrollment")
+                        .WithMany()
+                        .HasForeignKey("EnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.CommerceOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.ClassSession", "OriginalSession")
+                        .WithMany()
+                        .HasForeignKey("OriginalSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CurrentSession");
+
+                    b.Navigation("Enrollment");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OriginalSession");
+                });
+
             modelBuilder.Entity("SportsCenter.Repository.Entities.EmailToken", b =>
                 {
                     b.HasOne("SportsCenter.Repository.Entities.User", "User")
@@ -1695,9 +2068,27 @@ namespace SportsCenter.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.CommerceOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Member");
 
                     b.Navigation("Plan");
+
+                    b.Navigation("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.MemberWallet", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Member")
+                        .WithOne()
+                        .HasForeignKey("SportsCenter.Repository.Entities.MemberWallet", "MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Member");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.MembershipPlan", b =>
@@ -1790,6 +2181,11 @@ namespace SportsCenter.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.CommerceOrder", "FundingOrder")
+                        .WithMany()
+                        .HasForeignKey("FundingOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "Member")
                         .WithMany()
                         .HasForeignKey("MemberId")
@@ -1816,14 +2212,15 @@ namespace SportsCenter.Repository.Migrations
                     b.HasOne("SportsCenter.Repository.Entities.MemberSubscription", "Subscription")
                         .WithMany()
                         .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("AttendanceFinalizedByUser");
 
                     b.Navigation("CancelledByUser");
 
                     b.Navigation("Coach");
+
+                    b.Navigation("FundingOrder");
 
                     b.Navigation("Member");
 
@@ -1929,6 +2326,39 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("RecordedBy");
 
                     b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.WalletEntry", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.CommerceOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SportsCenter.Repository.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Member");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.Class", b =>
