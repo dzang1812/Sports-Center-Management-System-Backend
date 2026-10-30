@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.OpenApi.Models;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
+using SportsCenter.Services.Ai;
 using SportsCenter.Services.Auth;
 using SportsCenter.Services.Audit;
 using SportsCenter.Services.Email;
@@ -114,6 +115,10 @@ builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
+
+builder.Services.AddScoped<IAiRepository, AiRepository>();
+builder.Services.AddScoped<IAiUsageService, AiUsageService>();
+builder.Services.AddHttpClient<IAiService, AiService>(c => c.Timeout = TimeSpan.FromSeconds(120));
 
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.AddSingleton(sp =>
