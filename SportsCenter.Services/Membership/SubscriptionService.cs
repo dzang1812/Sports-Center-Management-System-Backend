@@ -91,7 +91,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             if (plan.SportId.HasValue && plan.Sport?.Status != SportStatus.Active &&
                 (plan.IncludesClasses || plan.PtSessionCredits > 0))
                 throw SchedulingException.Conflict("PLAN_SPORT_INACTIVE", "Bộ môn của gói đã ngừng hoạt động.");
-            var pending = await repo.FindPendingSubscriptionPaymentAsync(member.Id, plan.Id, token);
+            var pending = await repo.GetPendingSubscriptionPaymentAsync(member.Id, plan.Id, token);
             if (pending != null)
             {
                 if (pending.Method != method) throw SchedulingException.Conflict("SUBSCRIPTION_PAYMENT_PENDING", "Đã có thanh toán chờ với phương thức khác.");

@@ -49,7 +49,7 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .ToDictionaryAsync(x => x.SubscriptionId, x => x.Status, ct);
     }
 
-    public Task<Payment?> FindPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
+    public Task<Payment?> GetPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription!).ThenInclude(x => x.Plan).FirstOrDefaultAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending && x.Subscription != null && x.Subscription.PlanId == planId, ct);
 
     public Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>

@@ -6,12 +6,15 @@ namespace SportsCenter.Services.Scheduling;
 
 public record PagedResponse<T>(List<T> Items, int Total, int Page, int PageSize);
 public record ClassDto(int Id, string Name, int SportId, string Sport, int RoomId, string Room, int? CoachId,
-    string? Coach, int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate, ClassStatus Status, ClassBookingMode BookingMode);
+    string? Coach, int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate, ClassStatus Status,
+    ClassBookingMode BookingMode, string? Description = null);
 public record UpsertClassRequest(
     [param: Required, StringLength(150, MinimumLength = 2)] string Name,
     int SportId, int RoomId, int? CoachId,
     [param: Range(1, 10000)] int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate,
     [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft, ClassBookingMode BookingMode = ClassBookingMode.LegacySession);
+public record PublicClassDto(int Id, string Name, string Sport, Level Level, string? Description,
+    DateOnly StartDate, DateOnly EndDate, List<string> ImageUrls);
 public record AssignCoachRequest(int CoachId);
 public record GenerateSessionsRequest(DayOfWeek[] DaysOfWeek, TimeOnly StartTime, TimeOnly EndTime);
 public record GenerateSessionsResponse(int Created, int Existing, List<int> SessionIds);
@@ -25,12 +28,14 @@ public record CancelSessionRequest([param: Required, StringLength(500, MinimumLe
 
 public interface IClassScheduleService
 {
-    Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct);
+    Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct);
+    Task<List<PublicClassDto>> ListFeaturedClassesAsync(int count, CancellationToken ct);
+    Task<List<PublicClassDto>> ListPublicClassesAsync(int? sportId, Level? level, CancellationToken ct);
     Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct);
     Task<ClassDto> UpdateClassAsync(int actorId, int id, UpsertClassRequest request, CancellationToken ct);
     Task<GenerateSessionsResponse> GenerateAsync(int actorId, int classId, GenerateSessionsRequest request, CancellationToken ct);
     Task<ClassDto> AssignCoachAsync(int actorId, int classId, AssignCoachRequest request, CancellationToken ct);
-    Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int page, int pageSize, CancellationToken ct);
+    Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId, int page, int pageSize, CancellationToken ct);
     Task<SessionDto> UpdateSessionAsync(int actorId, int sessionId, UpdateSessionRequest request, CancellationToken ct);
     Task CancelSessionAsync(int actorId, int sessionId, CancelSessionRequest request, CancellationToken ct);
 }
@@ -39,12 +44,30 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules) : IClassScheduleService
 {
-    public async Task<PagedResponse<ClassDto>> ListClassesAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
-        var (rows, total) = await classes.ListClassesAsync(page, pageSize, ct);
+        var (rows, total) = await classes.ListClassesAsync(sportId, status, q, page, pageSize, ct);
         return new(rows.Select(ToClassDto).ToList(), total, page, pageSize);
     }
+
+    public async Task<List<PublicClassDto>> ListFeaturedClassesAsync(int count, CancellationToken ct)
+    {
+        count = Math.Clamp(count, 1, 12);
+        var today = DateOnly.FromDateTime(clock.LocalNow);
+        var rows = await classes.ListFeaturedClassesAsync(today, count, ct);
+        return rows.Select(ToPublicClassDto).ToList();
+    }
+
+    public async Task<List<PublicClassDto>> ListPublicClassesAsync(int? sportId, Level? level, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(clock.LocalNow);
+        var rows = await classes.ListPublicOpenClassesAsync(sportId, level, today, ct);
+        return rows.Select(ToPublicClassDto).ToList();
+    }
+
+    private static PublicClassDto ToPublicClassDto(Class x) =>
+        new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.Room.ImageUrls);
 
     public async Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct)
     {
@@ -235,13 +258,13 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             return await GetClassAsync(classId, token);
         }, ct);
 
-    public async Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
         from ??= DateOnly.FromDateTime(clock.LocalNow);
         to ??= from.Value.AddDays(30);
         if (to < from || to.Value.DayNumber - from.Value.DayNumber > 180) throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng lọc tối đa 180 ngày.");
-        var (rows, total) = await classes.ListOpenSessionsAsync(sportId, from.Value, to.Value, coachId, level, page, pageSize, ct);
+        var (rows, total) = await classes.ListOpenSessionsAsync(sportId, from.Value, to.Value, coachId, level, classId, page, pageSize, ct);
         var items = rows.Select(x => ToSessionDto(x.Session, x.Class, x.Sport, x.Room, x.Coach, x.Booked)).ToList();
         return new(items, total, page, pageSize);
     }
@@ -400,7 +423,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     private static SessionConflict ToConflict(ResourceConflict x) => new(x.Date, x.StartTime, x.EndTime, x.Resource, x.ResourceId);
 
     private static ClassDto ToClassDto(Class x) => new(x.Id, x.Name, x.SportId, x.Sport.Name, x.RoomId, x.Room.Name, x.CoachId,
-        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.BookingMode);
+        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.BookingMode, x.Description);
 
     private static SessionDto ToSessionDto(ClassSession x, Class c, string sport, string room, string? coach, int booked) =>
         new(x.Id, c.Id, x.ClassName, c.SportId, sport, x.Level, x.Date, x.StartTime, x.EndTime, x.RoomId, room, x.CoachId, coach,

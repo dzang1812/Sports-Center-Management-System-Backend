@@ -19,6 +19,7 @@ public class Room
     public int Capacity { get; set; }
     public RoomStatus Status { get; set; } = RoomStatus.Active;
     public bool IsActive { get; set; } = true; // compatibility with the initial schema
+    public List<string> ImageUrls { get; set; } = []; // first is the main photo, rest are detail shots
 }
 
 public class Class

@@ -13,7 +13,9 @@ public record BookingKey(int MemberId, int SessionId);
 public interface IClassRepository
 {
     // classes
-    Task<(List<Class> Items, int Total)> ListClassesAsync(int page, int pageSize, CancellationToken ct);
+    Task<(List<Class> Items, int Total)> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct);
+    Task<List<Class>> ListFeaturedClassesAsync(DateOnly today, int count, CancellationToken ct);
+    Task<List<Class>> ListPublicOpenClassesAsync(int? sportId, Level? level, DateOnly today, CancellationToken ct);
     Task<Class?> GetClassAsync(int id, CancellationToken ct);
     Task<Class> GetClassDetailAsync(int id, CancellationToken ct);
     Task<Class> GetClassWithRoomAndCoachAsync(int id, CancellationToken ct);
@@ -28,7 +30,7 @@ public interface IClassRepository
 
     // sessions
     Task<(List<SessionRow> Items, int Total)> ListOpenSessionsAsync(int? sportId, DateOnly from, DateOnly to, int? coachId, Level? level,
-        int page, int pageSize, CancellationToken ct);
+        int? classId, int page, int pageSize, CancellationToken ct);
     Task<SessionRow> GetSessionRowAsync(int id, CancellationToken ct);
     Task<SessionResources?> GetSessionResourcesAsync(int sessionId, CancellationToken ct);
     Task<List<int>> GetConfirmedMemberIdsAsync(int sessionId, CancellationToken ct);
@@ -50,13 +52,28 @@ public interface IClassRepository
 
 public class ClassRepository(AppDbContext db) : IClassRepository
 {
-    public async Task<(List<Class> Items, int Total)> ListClassesAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<(List<Class> Items, int Total)> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct)
     {
         var query = db.Classes.AsNoTracking();
+        if (sportId is { } s) query = query.Where(x => x.SportId == s);
+        if (status is { } st) query = query.Where(x => x.Status == st);
+        if (!string.IsNullOrWhiteSpace(q)) { var term = q.Trim().ToLower(); query = query.Where(x => x.Name.ToLower().Contains(term)); }
         var total = await query.CountAsync(ct);
         var items = await query.OrderBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Include(x => x.Sport).Include(x => x.Room).Include(x => x.Coach).ToListAsync(ct);
         return (items, total);
+    }
+
+    public Task<List<Class>> ListFeaturedClassesAsync(DateOnly today, int count, CancellationToken ct) => db.Classes.AsNoTracking()
+        .Where(x => x.Status == ClassStatus.Open && x.EndDate >= today).Include(x => x.Sport).Include(x => x.Room)
+        .OrderBy(x => x.StartDate).Take(count).ToListAsync(ct);
+
+    public Task<List<Class>> ListPublicOpenClassesAsync(int? sportId, Level? level, DateOnly today, CancellationToken ct)
+    {
+        var query = db.Classes.AsNoTracking().Where(x => x.Status == ClassStatus.Open && x.EndDate >= today);
+        if (sportId is { } s) query = query.Where(x => x.SportId == s);
+        if (level is { } l) query = query.Where(x => x.Level == l);
+        return query.Include(x => x.Sport).Include(x => x.Room).OrderBy(x => x.StartDate).ToListAsync(ct);
     }
 
     public Task<Class?> GetClassAsync(int id, CancellationToken ct) => db.Classes.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -96,7 +113,7 @@ public class ClassRepository(AppDbContext db) : IClassRepository
     public void AddSessions(IEnumerable<ClassSession> sessions) => db.ClassSessions.AddRange(sessions);
 
     public async Task<(List<SessionRow> Items, int Total)> ListOpenSessionsAsync(int? sportId, DateOnly from, DateOnly to, int? coachId, Level? level,
-        int page, int pageSize, CancellationToken ct)
+        int? classId, int page, int pageSize, CancellationToken ct)
     {
         var query = db.ClassSessions.AsNoTracking().Where(x => x.Date >= from && x.Date <= to && x.Status != SessionStatus.Cancelled &&
             x.Class.Status == ClassStatus.Open && x.CoachId != null && x.Coach!.IsActive &&
@@ -104,6 +121,7 @@ public class ClassRepository(AppDbContext db) : IClassRepository
         if (sportId is { } s) query = query.Where(x => x.Class.SportId == s);
         if (coachId is { } c) query = query.Where(x => x.CoachId == c);
         if (level is { } l) query = query.Where(x => x.Level == l);
+        if (classId is { } cl) query = query.Where(x => x.ClassId == cl);
         var total = await query.CountAsync(ct);
         var items = await query.OrderBy(x => x.Date).ThenBy(x => x.StartTime).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new SessionRow(x, x.Class, x.Class.Sport.Name, x.Room.Name, x.Coach!.FullName,

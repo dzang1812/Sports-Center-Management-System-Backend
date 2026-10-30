@@ -33,6 +33,14 @@ public class UsersController(IUserAdminService admin) : ControllerBase
             return NoContent();
         });
 
+    [HttpPatch("{id:int}/verify-email")]
+    public Task<IActionResult> VerifyEmail(int id) =>
+        Run(async () =>
+        {
+            await admin.VerifyEmailAsync(ActorId, id);
+            return NoContent();
+        });
+
     // Expected business failures become 400 with { error }.
     private static async Task<IActionResult> Run(Func<Task<IActionResult>> action)
     {
