@@ -27,6 +27,7 @@ public record PaymentDto(int Id, int MemberId, string MemberName, int? Subscript
 public interface ISubscriptionService
 {
     Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct);
+    Task<PaymentDto> GetCounterTopUpCheckoutAsync(int actorId, int paymentId, CancellationToken ct);
     Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct);
     Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct);
     Task<PaymentDto> GetPaymentAsync(int actorId, int paymentId, CancellationToken ct);
@@ -39,6 +40,17 @@ public interface ISubscriptionService
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
     ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions, WalletService wallet) : ISubscriptionService
 {
+    public async Task<PaymentDto> GetCounterTopUpCheckoutAsync(int actorId, int paymentId, CancellationToken ct)
+    {
+        await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
+        var payment = await repo.GetPaymentWithDetailsAsync(paymentId, ct)
+            ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch.");
+        if (payment.ReceivedById != actorId || payment.Purpose != PaymentPurpose.WalletTopUp ||
+            payment.Method != PaymentMethod.BankTransfer || payment.SubscriptionId != null)
+            throw SchedulingException.Forbidden("PAYMENT_NOT_OWNED", "Giao dịch không thuộc yêu cầu thanh toán PT của thu ngân này.");
+        return await AttachCheckoutLinkAsync(paymentId, ct);
+    }
+
     public async Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct)
     {
         var paymentId = await wallet.ExecuteAsync(actorId, "online-top-up", key, request, async token =>

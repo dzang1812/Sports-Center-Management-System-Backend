@@ -23,6 +23,12 @@ public sealed class PtController(IPtService service) : ControllerBase
     public Task<List<PtSlotDto>> Slots(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct) => service.ListSlotsAsync(coachId, sportId, from, to, ct);
     [HttpPost("bookings"), Authorize(Roles = "Member,Receptionist")]
     public Task<PtBookingDto> Book(CreatePtBookingRequest request, CancellationToken ct) => service.BookAsync(ActorId, request, ct, Request.Headers["Idempotency-Key"].FirstOrDefault());
+    [HttpPost("counter-checkouts"), Authorize(Roles = "Receptionist")]
+    public Task<PtCounterCheckoutDto> CounterCheckout(PtCounterCheckoutRequest request, CancellationToken ct) =>
+        service.CounterCheckoutAsync(ActorId, request, Request.Headers["Idempotency-Key"].FirstOrDefault() ?? "", ct);
+    [HttpPost("counter-checkouts/{paymentId:int}/complete"), Authorize(Roles = "Receptionist")]
+    public Task<PtBookingDto> CompleteCounterCheckout(int paymentId, CancellationToken ct) =>
+        service.CompleteCounterCheckoutAsync(ActorId, paymentId, ct);
     [HttpGet("bookings"), Authorize(Roles = "Manager")]
     public Task<PagedResponse<PtBookingListItem>> Bookings(DateOnly? from, DateOnly? to, int? memberId,
         int? coachId, int? sportId, BookingStatus? status, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
