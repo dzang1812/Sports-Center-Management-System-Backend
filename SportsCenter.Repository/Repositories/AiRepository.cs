@@ -31,6 +31,13 @@ public interface IAiRepository
     Task<TrainingPlan?> GetOwnedPlanAsync(int memberId, int planId, CancellationToken ct);
     Task DeactivatePlansAsync(int memberId, CancellationToken ct);
     void AddPlan(TrainingPlan plan);
+
+    // Session evaluation
+    Task<ClassSession?> GetSessionAsync(int sessionId, CancellationToken ct);
+    Task<List<TrainingResult>> ResultsAsync(int memberId, int sessionId, CancellationToken ct);
+    Task<List<TrainingResult>> PastResultsAsync(int memberId, int excludeSessionId, int take, CancellationToken ct);
+    Task<AiWorkoutEvaluation?> GetEvaluationAsync(int memberId, int sessionId, CancellationToken ct);
+    Task AddEvaluationAsync(AiWorkoutEvaluation evaluation, CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
 }
 
@@ -134,6 +141,27 @@ public class AiRepository(AppDbContext db) : IAiRepository
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
 
     public void AddPlan(TrainingPlan plan) => db.TrainingPlans.Add(plan);
+
+    public Task<ClassSession?> GetSessionAsync(int sessionId, CancellationToken ct) =>
+        db.ClassSessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == sessionId, ct);
+
+    public Task<List<TrainingResult>> ResultsAsync(int memberId, int sessionId, CancellationToken ct) =>
+        db.TrainingResults.AsNoTracking().Include(x => x.Exercise)
+            .Where(x => x.MemberId == memberId && x.SessionId == sessionId).OrderBy(x => x.Id).ToListAsync(ct);
+
+    public Task<List<TrainingResult>> PastResultsAsync(int memberId, int excludeSessionId, int take, CancellationToken ct) =>
+        db.TrainingResults.AsNoTracking().Include(x => x.Exercise).Include(x => x.Session)
+            .Where(x => x.MemberId == memberId && x.SessionId != null && x.SessionId != excludeSessionId)
+            .OrderByDescending(x => x.Session!.Date).ThenByDescending(x => x.Id).Take(take).ToListAsync(ct);
+
+    public Task<AiWorkoutEvaluation?> GetEvaluationAsync(int memberId, int sessionId, CancellationToken ct) =>
+        db.AiWorkoutEvaluations.AsNoTracking().FirstOrDefaultAsync(x => x.MemberId == memberId && x.SessionId == sessionId, ct);
+
+    public async Task AddEvaluationAsync(AiWorkoutEvaluation evaluation, CancellationToken ct)
+    {
+        db.AiWorkoutEvaluations.Add(evaluation);
+        await db.SaveChangesAsync(ct);
+    }
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

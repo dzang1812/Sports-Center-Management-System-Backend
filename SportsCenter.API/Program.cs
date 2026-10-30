@@ -118,6 +118,7 @@ builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
 
 builder.Services.AddScoped<IAiRepository, AiRepository>();
 builder.Services.AddScoped<IAiUsageService, AiUsageService>();
+builder.Services.AddScoped<IWorkoutEvaluationService, WorkoutEvaluationService>();
 builder.Services.AddHttpClient<IAiService, AiService>(c => c.Timeout = TimeSpan.FromSeconds(120));
 
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));

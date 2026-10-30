@@ -14,6 +14,9 @@ public interface IAiService
     Task<ChatResponseDto> ChatAsync(int userId, string message, CancellationToken ct = default);
     Task<ChatResponseDto> GenerateWorkoutPlanAsync(int userId, GenerateWorkoutPlanRequestDto request, CancellationToken ct = default);
     Task ApplySuggestionsAsync(int userId, ApplySuggestionsRequestDto dto, CancellationToken ct = default);
+    Task<ImageAnalyzeResponseDto> AnalyzeImageAsync(int userId, Stream image, string contentType, string mode, CancellationToken ct = default);
+    Task<VideoFormAnalyzeResponseDto> AnalyzeFormVideoAsync(int userId, Stream video, string fileName, CancellationToken ct = default);
+    Task<WorkoutEvaluationNarrativeDto> EvaluateWorkoutAsync(int userId, WorkoutEvaluationMetricsDto metrics, CancellationToken ct = default);
 }
 
 public partial class AiService(
