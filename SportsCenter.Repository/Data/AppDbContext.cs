@@ -33,6 +33,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AiSuggestion> AiSuggestions => Set<AiSuggestion>();
     public DbSet<AiChatMessage> AiChatMessages => Set<AiChatMessage>();
+    public DbSet<AiMonthlyBudget> AiMonthlyBudgets => Set<AiMonthlyBudget>();
+    public DbSet<AiDailyQuota> AiDailyQuotas => Set<AiDailyQuota>();
+    public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
+    public DbSet<AiFeatureUsageLog> AiFeatureUsageLogs => Set<AiFeatureUsageLog>();
+    public DbSet<AiWorkoutEvaluation> AiWorkoutEvaluations => Set<AiWorkoutEvaluation>();
+    public DbSet<TrainingPlanSession> TrainingPlanSessions => Set<TrainingPlanSession>();
 
     public DbSet<MemberWallet> MemberWallets => Set<MemberWallet>();
     public DbSet<WalletEntry> WalletEntries => Set<WalletEntry>();
@@ -153,5 +159,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<AuditLog>().Property(a => a.Details).HasColumnType("jsonb");
         b.Entity<AiSuggestion>().Property(a => a.Input).HasColumnType("jsonb");
         b.Entity<AiSuggestion>().Property(a => a.Output).HasColumnType("jsonb");
+
+        b.Entity<AiMonthlyBudget>().HasKey(x => x.Period);
+        b.Entity<AiMonthlyBudget>().Property(x => x.SpentUsd).HasPrecision(14, 6); // per-call costs are fractions of a cent
+        b.Entity<AiUsageLog>().Property(x => x.CostUsd).HasPrecision(14, 6);
+        b.Entity<AiDailyQuota>().HasKey(x => new { x.UserId, x.Date });
+        b.Entity<AiChatMessage>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        b.Entity<AiUsageLog>().HasIndex(x => x.CreatedAt);
+        b.Entity<AiFeatureUsageLog>().HasIndex(x => x.CreatedAt);
+        b.Entity<AiWorkoutEvaluation>().HasIndex(x => new { x.MemberId, x.SessionId }).IsUnique();
+        b.Entity<AiWorkoutEvaluation>().Property(x => x.Report).HasColumnType("jsonb");
+        b.Entity<TrainingPlan>().HasIndex(x => new { x.MemberId, x.IsActive });
+        b.Entity<TrainingPlanSession>().HasOne(x => x.Plan).WithMany(p => p.Sessions)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -16,19 +16,34 @@ public class Exercise
 public class TrainingPlan
 {
     public int Id { get; set; }
-    public int CoachId { get; set; }
-    public User Coach { get; set; } = null!;
+    public int? CoachId { get; set; } // null = self-service plan created by the member (e.g. via AI)
+    public User? Coach { get; set; }
     public int? MemberId { get; set; }
     public User? Member { get; set; }
     public int? ClassId { get; set; }
     public Class? Class { get; set; }
     public string Title { get; set; } = "";
     public string? Goal { get; set; }
+    public string? Description { get; set; }
+    public int DaysPerWeek { get; set; }
+    public bool IsActive { get; set; } = true; // the AI apply flow keeps one active plan per member
+    public bool CreatedByAi { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public List<TrainingPlanItem> Items { get; set; } = [];
+    public List<TrainingPlanSession> Sessions { get; set; } = [];
+}
+
+// One training day inside a plan (AI plans group exercises by weekday).
+public class TrainingPlanSession
+{
+    public int Id { get; set; }
+    public int PlanId { get; set; }
+    public TrainingPlan Plan { get; set; } = null!;
+    public DayOfWeek DayOfWeek { get; set; }
+    public string Focus { get; set; } = "";
 }
 
 public class TrainingPlanItem
@@ -41,8 +56,11 @@ public class TrainingPlanItem
     public int OrderNo { get; set; }
     public int? Sets { get; set; }
     public int? Reps { get; set; }
+    public string? RepsText { get; set; } // free-form target such as "10-12" (AI plans); Reps keeps the first number
     public int? DurationMin { get; set; }
     public string? Notes { get; set; }
+    public int? SessionId { get; set; } // TrainingPlanSession; null for coach-made flat plans
+    public TrainingPlanSession? Session { get; set; }
 }
 
 public class TrainingResult // what the member actually did, recorded by the coach after a session
