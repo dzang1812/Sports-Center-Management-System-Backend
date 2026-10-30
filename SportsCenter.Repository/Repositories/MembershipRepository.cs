@@ -50,8 +50,11 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
     }
 
     public Task<Payment?> GetPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
-        db.Payments.Include(x => x.Subscription).FirstOrDefaultAsync(x => x.MemberId == memberId &&
-            x.Status == PaymentStatus.Pending && x.Subscription != null && x.Subscription.PlanId == planId, ct);
+        db.Payments.Include(x => x.Subscription!).ThenInclude(x => x.Plan).FirstOrDefaultAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending && x.Subscription != null && x.Subscription.PlanId == planId, ct);
+
+    public Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
+        db.Payments.AnyAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending &&
+                                  x.Subscription != null && x.Subscription.PlanId == planId, ct);
 
     public async Task AddSubscriptionAsync(MemberSubscription subscription, CancellationToken ct) =>
         await db.MemberSubscriptions.AddAsync(subscription, ct);
@@ -99,7 +102,7 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
         DateOnly today, CancellationToken ct)
     {
         var revenue = await db.Payments
-            .Where(p => p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive)
+            .Where(p => p.Purpose != PaymentPurpose.WalletTopUp && p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive)
             .GroupBy(_ => 1).Select(g => new { Total = g.Sum(x => x.Amount), Count = g.Count() })
             .FirstOrDefaultAsync(ct);
         var newMembers = await db.Users.CountAsync(u => u.Role == UserRole.Member && u.CreatedAt >= fromUtc && u.CreatedAt < toUtcExclusive, ct);
@@ -110,7 +113,9 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
         var newClassBookings = await db.ClassBookings.CountAsync(b =>
             b.Status != BookingStatus.Cancelled && b.CreatedAt >= fromUtc && b.CreatedAt < toUtcExclusive, ct);
 
-        return new RevenueReportData(revenue?.Total ?? 0, revenue?.Count ?? 0, newMembers, newSubscriptions,
+        var orders = await db.CommerceOrders.Where(x => x.CreatedAt >= fromUtc && x.CreatedAt < toUtcExclusive)
+            .GroupBy(_ => 1).Select(g => new { Total = g.Sum(x => x.PaidAmount - x.RefundedAmount), Count = g.Count() }).FirstOrDefaultAsync(ct);
+        return new RevenueReportData((revenue?.Total ?? 0) + (orders?.Total ?? 0), (revenue?.Count ?? 0) + (orders?.Count ?? 0), newMembers, newSubscriptions,
             activeSubscriptions, expiredSubscriptions, newClassBookings);
     }
 

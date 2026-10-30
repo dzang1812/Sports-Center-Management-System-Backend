@@ -38,9 +38,9 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : Contro
     private static readonly string[] BypassedTimeGuards =
     [
         "class and PT booking open/close windows",
-        "class and PT booking subscription start/end dates",
+        "legacy class and PT subscription start/end dates",
         "class booking cancellation cutoff",
-        "PT cancellation and reschedule cutoffs",
+        "legacy PT cancellation and reschedule cutoffs",
         "class session generation and move future-date restrictions",
         "class check-in open/close window",
         "class check-in code expiry",
@@ -53,6 +53,8 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : Contro
         "cancelled/completed/finalized/attended state protections",
         "capacity, duplicate booking and schedule conflicts",
         "payment and subscription entitlement",
+        "course enrollment cutoff and purchased package expiry",
+        "wallet debit, source transfer, refund bounds and idempotency",
         "PT credit consumption and idempotent refund",
         "class, room, coach and member validity"
     ];

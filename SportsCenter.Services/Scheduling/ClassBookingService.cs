@@ -5,7 +5,7 @@ using SportsCenter.Repository.Repositories;
 namespace SportsCenter.Services.Scheduling;
 
 public record BookForMemberRequest(int? MemberId);
-public record BookingDto(int Id, int SessionId, int MemberId, int PerformedByUserId, int SubscriptionId,
+public record BookingDto(int Id, int SessionId, int MemberId, int PerformedByUserId, int? SubscriptionId,
     BookingStatus Status, DateTime CreatedAt, DateTime? CancelledAt, bool IsLateCancellation = false);
 
 public interface IClassBookingService
@@ -39,6 +39,7 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
             await transaction.LockAsync(locks, token);
             var session = await classes.GetSessionForBookingAsync(sessionId, token)
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
+            if (session.Class.BookingMode == ClassBookingMode.CourseEnrollment) throw SchedulingException.Conflict("COURSE_ENROLLMENT_REQUIRED", "Phải đăng ký nguyên khóa, không đặt buổi lẻ.");
             ValidateBookable(session);
             var eligibleCoach = await users.IsCoachForSportAsync(session.CoachId!.Value, session.Class.SportId, token);
             if (!eligibleCoach) throw SchedulingException.Conflict("COACH_NOT_ELIGIBLE", "Huấn luyện viên không còn đúng chuyên môn.");
@@ -86,6 +87,7 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
                 throw SchedulingException.Forbidden("BOOKING_NOT_OWNED", "Không thể hủy booking của hội viên khác.");
             await transaction.LockAsync([new(ScheduleResourceType.Member, snapshot.MemberId), new(ScheduleResourceType.Session, snapshot.SessionId)], token);
             var booking = await classes.GetBookingWithSessionAsync(bookingId, token);
+            if (booking.EnrollmentId != null) throw SchedulingException.Conflict("CANCEL_WHOLE_ENROLLMENT", "Nghỉ một buổi không hoàn tiền; muốn hủy khóa hãy dùng enrollment.");
             if (booking.Status == BookingStatus.Cancelled) return 0; // idempotent: repeated DELETE is 204
             if (booking.Status == BookingStatus.Completed) throw SchedulingException.Conflict("BOOKING_COMPLETED", "Không thể hủy booking đã hoàn tất.");
             var startUtc = clock.ToUtc(booking.Session.Date, booking.Session.StartTime);

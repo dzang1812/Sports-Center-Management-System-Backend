@@ -82,8 +82,8 @@ public static class SchedulingRules
     public static bool SubscriptionCovers(SchedulingSubscriptionSnapshot subscription, int sportId, DateOnly activityDate,
         bool needsClass = false, bool needsPt = false, bool enforceTimeRules = true) =>
         (subscription.Status == SubscriptionStatus.Active ||
-            (!enforceTimeRules && subscription.Status == SubscriptionStatus.Expired)) &&
-        (!enforceTimeRules || subscription.StartDate <= activityDate && activityDate <= subscription.EndDate) &&
+            (!enforceTimeRules && !subscription.IsWalletPurchase && subscription.Status == SubscriptionStatus.Expired)) &&
+        (!enforceTimeRules && !subscription.IsWalletPurchase || subscription.StartDate <= activityDate && activityDate <= subscription.EndDate) &&
         (subscription.SportId is null || subscription.SportId == sportId) &&
         !subscription.HasPendingPayment &&
         (!needsClass || subscription.IncludesClasses) &&

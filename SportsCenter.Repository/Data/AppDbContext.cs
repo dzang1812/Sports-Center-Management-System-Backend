@@ -34,6 +34,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AiSuggestion> AiSuggestions => Set<AiSuggestion>();
     public DbSet<AiChatMessage> AiChatMessages => Set<AiChatMessage>();
 
+    public DbSet<MemberWallet> MemberWallets => Set<MemberWallet>();
+    public DbSet<WalletEntry> WalletEntries => Set<WalletEntry>();
+    public DbSet<CommerceOrder> CommerceOrders => Set<CommerceOrder>();
+    public DbSet<CommerceRequest> CommerceRequests => Set<CommerceRequest>();
+    public DbSet<CourseEntitlement> CourseEntitlements => Set<CourseEntitlement>();
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (ChangeTracker.Entries<WalletEntry>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Wallet ledger is append-only; record a compensating transaction.");
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     protected override void ConfigureConventions(ModelConfigurationBuilder c)
     {
         c.Properties<Enum>().HaveConversion<string>();
@@ -45,6 +58,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // Rows are soft-deleted / cancelled, never cascaded away by accident.
         foreach (var fk in b.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
             fk.DeleteBehavior = DeleteBehavior.Restrict;
+
+        b.Entity<Class>().Property(x => x.BookingMode).HasDefaultValue(ClassBookingMode.LegacySession);
+        b.Entity<PtBooking>().Property(x => x.FundingSource).HasDefaultValue(PtFundingSource.LegacyCredit);
+        b.Entity<Payment>().Property(x => x.Purpose).HasDefaultValue(PaymentPurpose.LegacySubscription);
+        b.Entity<MemberWallet>().HasKey(x => x.MemberId);
+        b.Entity<MemberWallet>().HasOne(x => x.Member).WithOne().HasForeignKey<MemberWallet>(x => x.MemberId);
+        b.Entity<MemberWallet>().ToTable(t => t.HasCheckConstraint("CK_Wallet_Nonnegative", "\"Balance\" >= 0 AND \"Balance\" = trunc(\"Balance\")"));
+        b.Entity<WalletEntry>().HasIndex(x => x.Reference).IsUnique();
+        b.Entity<WalletEntry>().Property(x => x.Reference).HasMaxLength(180);
+        b.Entity<WalletEntry>().ToTable(t => t.HasCheckConstraint("CK_WalletEntry_Vnd", "\"Amount\" <> 0 AND \"Amount\" = trunc(\"Amount\") AND \"BalanceAfter\" >= 0"));
+        b.Entity<CommerceOrder>().ToTable(t => t.HasCheckConstraint("CK_Order_Refund", "\"PaidAmount\" > 0 AND \"RefundedAmount\" >= 0 AND \"RefundedAmount\" <= \"PaidAmount\""));
+        b.Entity<CommerceRequest>().Property(x => x.Key).HasMaxLength(100);
+        b.Entity<CommerceRequest>().HasIndex(x => new { x.ActorId, x.Operation, x.Key }).IsUnique();
+        b.Entity<CourseEntitlement>().HasIndex(x => new { x.OrderId, x.OriginalSessionId }).IsUnique();
+        b.Entity<ClassSession>().HasIndex(x => x.ReplacesSessionId).IsUnique().HasFilter("\"ReplacesSessionId\" IS NOT NULL");
+        b.Entity<MemberSubscription>().HasIndex(x => x.PurchaseOrderId).IsUnique().HasFilter("\"PurchaseOrderId\" IS NOT NULL");
+        b.Entity<Payment>().HasIndex(x => x.ProviderReference).IsUnique().HasFilter("\"ProviderReference\" IS NOT NULL");
+        b.Entity<ClassBooking>().ToTable(t => t.HasCheckConstraint("CK_ClassBooking_Source", "(\"SubscriptionId\" IS NOT NULL) <> (\"EnrollmentId\" IS NOT NULL)"));
+        b.Entity<PtBooking>().HasIndex(x => x.FundingOrderId);
+        b.Entity<PtBooking>().HasIndex(x => new { x.FundingOrderId, x.Status }).IsUnique().HasFilter("\"FundingOrderId\" IS NOT NULL AND \"Status\" = 'Confirmed'");
+        b.Entity<PtBooking>().ToTable(t => t.HasCheckConstraint("CK_PtBooking_Source", "(\"FundingSource\" = 'Wallet' AND \"SubscriptionId\" IS NULL AND \"FundingOrderId\" IS NOT NULL) OR (\"FundingSource\" <> 'Wallet' AND \"SubscriptionId\" IS NOT NULL)"));
 
         b.Entity<User>().HasIndex(u => u.Email).IsUnique();
         b.Entity<EmailToken>().HasIndex(t => t.TokenHash).IsUnique();

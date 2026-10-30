@@ -12,7 +12,7 @@ namespace SportsCenter.Services.Scheduling;
 // session has ended, the FE treats a null/Absent value as "missed" and Present/Late as "attended".
 public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, string Title, string Sport,
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach,
-    BookingStatus Status, AttendanceStatus? AttendanceStatus);
+    BookingStatus Status, AttendanceStatus? AttendanceStatus, int? EnrollmentId = null, PtFundingSource? FundingSource = null);
 // Status is null for a session that hasn't ended yet ("chưa điểm danh"); once it has ended, a null
 // Status means the member missed check-in and is presented as Absent.
 public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, TimeOnly StartTime,
@@ -85,10 +85,10 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         var classItems = classBookings.Select(x => new PersonalScheduleItem("Class", x.Id, x.SessionId, x.Session.ClassName,
             x.Session.Class.Sport.Name, x.Session.Date, x.Session.StartTime, x.Session.EndTime, x.Session.RoomId, x.Session.Room.Name,
             x.Session.CoachId!.Value, x.Session.Coach!.FullName, x.Status,
-            classAttendance.TryGetValue(x.SessionId, out var cs) ? cs : null));
+            classAttendance.TryGetValue(x.SessionId, out var cs) ? cs : null, x.EnrollmentId));
         var ptItems = ptBookings.Select(x => new PersonalScheduleItem("PT", x.Id, x.Id, "Personal Training", x.Sport.Name,
             x.Date, x.StartTime, x.EndTime, x.RoomId, x.Room == null ? null : x.Room.Name, x.CoachId, x.Coach.FullName, x.Status,
-            ptAttendance.TryGetValue(x.Id, out var ps) ? ps : null));
+            ptAttendance.TryGetValue(x.Id, out var ps) ? ps : null, null, x.FundingSource));
         return classItems.Concat(ptItems).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToList();
     }
 
@@ -190,7 +190,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             ValidateCheckInCode(session, request.Code);
             var booking = await attendances.FindConfirmedClassBookingAsync(sessionId, memberId, token)
                 ?? throw SchedulingException.Forbidden("CLASS_BOOKING_REQUIRED", "Bạn không có booking hiệu lực cho buổi này.");
-            _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, token))
+            if (booking.SubscriptionId != null) _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, token))
                 .FirstOrDefault(x => x.Id == booking.SubscriptionId &&
                     SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date,
                         needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules))

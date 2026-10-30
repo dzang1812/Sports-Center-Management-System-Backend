@@ -7,12 +7,12 @@ namespace SportsCenter.Services.Scheduling;
 public record PagedResponse<T>(List<T> Items, int Total, int Page, int PageSize);
 public record ClassDto(int Id, string Name, int SportId, string Sport, int RoomId, string Room, int? CoachId,
     string? Coach, int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate, ClassStatus Status,
-    string? Description);
+    ClassBookingMode BookingMode, string? Description = null);
 public record UpsertClassRequest(
     [param: Required, StringLength(150, MinimumLength = 2)] string Name,
     int SportId, int RoomId, int? CoachId,
     [param: Range(1, 10000)] int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate,
-    [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft);
+    [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft, ClassBookingMode BookingMode = ClassBookingMode.LegacySession);
 public record PublicClassDto(int Id, string Name, string Sport, Level Level, string? Description,
     DateOnly StartDate, DateOnly EndDate, List<string> ImageUrls);
 public record AssignCoachRequest(int CoachId);
@@ -21,7 +21,7 @@ public record GenerateSessionsResponse(int Created, int Existing, List<int> Sess
 public record SessionConflict(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, string Resource, int ResourceId);
 public record SessionDto(int Id, int ClassId, string ClassName, int SportId, string Sport, Level Level,
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int RoomId, string Room, int? CoachId, string? Coach,
-    int Capacity, int RemainingSeats, SessionStatus Status);
+    int Capacity, int RemainingSeats, SessionStatus Status, ClassBookingMode BookingMode);
 public record UpdateSessionRequest(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int RoomId,
     [param: StringLength(500)] string? Note);
 public record CancelSessionRequest([param: Required, StringLength(500, MinimumLength = 2)] string Reason);
@@ -84,7 +84,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             {
                 Name = request.Name.Trim(), Description = request.Description?.Trim(), SportId = sport.Id, RoomId = room.Id,
                 CoachId = request.CoachId, Capacity = request.Capacity, Level = request.Level, StartDate = request.StartDate,
-                EndDate = request.EndDate, Status = request.Status,
+                EndDate = request.EndDate, Status = request.BookingMode == ClassBookingMode.CourseEnrollment ? ClassStatus.Draft : request.Status, BookingMode = request.BookingMode,
             };
             classes.AddClass(entity);
             await transaction.SaveChangesAsync(token);
@@ -104,6 +104,13 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var entity = await classes.GetClassAsync(id, token)
                 ?? throw SchedulingException.NotFound("CLASS_NOT_FOUND", "Không tìm thấy lớp.");
             var (sport, room) = await ValidateSportRoomAsync(request.SportId, request.RoomId, request.Capacity, token);
+            if (entity.BookingMode != request.BookingMode) throw SchedulingException.Conflict("BOOKING_MODE_IMMUTABLE", "Không chuyển mô hình quyền lợi của lớp cũ.");
+            if (entity.BookingMode == ClassBookingMode.CourseEnrollment)
+            {
+                if (request.Status != entity.Status) throw SchedulingException.Conflict("USE_COURSE_PUBLISH", "Dùng thao tác mở/đóng khóa đã kiểm tra lịch.");
+                if (request.Capacity != entity.Capacity || request.Level != entity.Level)
+                    throw SchedulingException.Conflict("COURSE_STRUCTURE_IMMUTABLE", "Không thay đổi sức chứa/trình độ khóa qua form legacy.");
+            }
             var oldName = entity.Name;
             var oldLevel = entity.Level;
             var oldCapacity = entity.Capacity;
@@ -142,7 +149,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
                 var conflicts = new List<SessionConflict>();
                 foreach (var session in futureSessions.Where(x => x.RoomId == oldRoomId))
                     conflicts.AddRange(await FindResourceConflictsAsync([session.Date], session.StartTime, session.EndTime,
-                        request.RoomId, assignedCoachId, session.Id, token));
+                        request.RoomId, session.CoachId ?? assignedCoachId, session.Id, token));
                 if (conflicts.Count != 0)
                     throw SchedulingException.Conflict("CLASS_UPDATE_CONFLICT", "Phòng mới gây xung đột cho lịch tương lai.", conflicts);
             }
@@ -176,6 +183,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (snapshot.CoachId is not { } snapshotCoachId) throw SchedulingException.Conflict("COACH_REQUIRED", "Cần gán huấn luyện viên trước khi sinh lịch.");
             await transaction.LockAsync([new(ScheduleResourceType.Sport, snapshot.SportId), new(ScheduleResourceType.Room, snapshot.RoomId), new(ScheduleResourceType.Coach, snapshotCoachId), new(ScheduleResourceType.Class, classId)], token);
             var item = await classes.GetClassWithRoomAndCoachAsync(classId, token);
+            if (item.BookingMode == ClassBookingMode.CourseEnrollment && item.Status != ClassStatus.Draft)
+                throw SchedulingException.Conflict("COURSE_SCHEDULE_FROZEN", "Chỉ sinh lịch khóa Draft; dùng buổi bù cho khóa đã bán.");
             if (item.EndDate.DayNumber - item.StartDate.DayNumber > 366)
                 throw new SchedulingException("DATE_RANGE_TOO_LARGE", "Một lần sinh lịch không được vượt quá 366 ngày.");
             if (item.Status == ClassStatus.Cancelled) throw SchedulingException.Conflict("CLASS_CANCELLED", "Lớp đã bị hủy.");
@@ -219,7 +228,12 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var localNow = clock.LocalNow;
             var today = DateOnly.FromDateTime(localNow);
             var timeNow = TimeOnly.FromDateTime(localNow);
-            var sessions = await classes.GetFutureScheduledSessionsAsync(classId, today, timeNow, false, token);
+            var candidates = await classes.GetFutureScheduledSessionsAsync(classId, today, timeNow, false, token);
+            var sessions = new List<ClassSession>();
+            foreach (var candidate in candidates.Where(x => x.CoachId == item.CoachId))
+                if (candidate.AttendanceFinalizedAt == null && !await classes.HasAnyAttendanceAsync(candidate.Id, token))
+                    sessions.Add(candidate); // preserve explicit overrides and already-recorded attendance
+
             var affectedMembers = new HashSet<int>();
             foreach (var session in sessions.Where(x => x.CoachId != request.CoachId))
                 affectedMembers.UnionWith(await classes.GetConfirmedMemberIdsAsync(session.Id, token));
@@ -279,6 +293,17 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
                 clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow))
                 throw SchedulingException.Conflict("SESSION_NOT_FUTURE", "Không thể sửa buổi đã diễn ra hoặc chuyển lịch về quá khứ.");
             if (request.Date < session.Class.StartDate || request.Date > session.Class.EndDate) throw new SchedulingException("DATE_OUTSIDE_CLASS", "Ngày nằm ngoài khoảng của lớp.");
+            if (session.Class.BookingMode == ClassBookingMode.CourseEnrollment)
+            {
+                if (clock.ToUtc(session.Date, session.StartTime) <= clock.UtcNow || clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow)
+                    throw SchedulingException.Conflict("COURSE_SESSION_STARTED", "Không sửa buổi đã bắt đầu dù Test Mode đang bật.");
+                if (session.Class.EnrollmentClosesAt > clock.ToUtc(request.Date, request.StartTime))
+                    throw SchedulingException.Conflict("COURSE_CUTOFF_CONFLICT", "Điều chỉnh hạn đăng ký trước khi chuyển khai giảng sớm hơn.");
+                if (session.Class.CourseStartsAt > clock.ToUtc(request.Date, request.StartTime))
+                    session.Class.CourseStartsAt = clock.ToUtc(request.Date, request.StartTime);
+            }
+            if (session.Class.BookingMode == ClassBookingMode.CourseEnrollment && request.EndTime - request.StartTime != session.EndTime - session.StartTime)
+                throw SchedulingException.Conflict("COURSE_DURATION_IMMUTABLE", "Không đổi thời lượng quyền lợi đã công bố; tạo khóa mới.");
             var room = await catalog.GetRoomAsync(request.RoomId, token) ?? throw SchedulingException.NotFound("ROOM_NOT_FOUND", "Không tìm thấy phòng.");
             if (room.Status != RoomStatus.Active || room.Capacity < session.Capacity) throw SchedulingException.Conflict("ROOM_UNAVAILABLE", "Phòng không hoạt động hoặc không đủ sức chứa.");
             if (session.CoachId is not { } coachId) throw SchedulingException.Conflict("COACH_REQUIRED", "Buổi học chưa có huấn luyện viên.");
@@ -294,6 +319,11 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
                     needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules));
             if (invalidSubscription) throw SchedulingException.Conflict("SESSION_MOVE_INVALIDATES_SUBSCRIPTION", "Ngày mới làm booking hiện hữu mất quyền gói.");
             session.Date = request.Date; session.StartTime = request.StartTime; session.EndTime = request.EndTime; session.RoomId = request.RoomId; session.Note = request.Note?.Trim();
+            if (session.Class.BookingMode == ClassBookingMode.CourseEnrollment && session.Class.EnrollmentClosesAt > clock.UtcNow)
+            {
+                var futureCourseSessions = await classes.GetFutureScheduledSessionsAsync(session.ClassId, DateOnly.FromDateTime(clock.LocalNow), TimeOnly.FromDateTime(clock.LocalNow), false, token);
+                session.Class.CourseStartsAt = futureCourseSessions.Min(x => clock.ToUtc(x.Date, x.StartTime));
+            }
             session.NotificationRevision++;
             audit.AddAudit(actorId, "ClassSession.Update", nameof(ClassSession), sessionId, request);
             foreach (var memberId in memberIds) notifications.AddNotification(memberId, actorId, NotificationType.ScheduleChange,
@@ -319,6 +349,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             locks.Add(new(ScheduleResourceType.Session, sessionId));
             await transaction.LockAsync(locks, token);
             var session = await classes.GetSessionWithClassAsync(sessionId, token);
+            if (session.Class.BookingMode == ClassBookingMode.CourseEnrollment)
+                throw SchedulingException.Conflict("USE_COURSE_SESSION_CANCEL", "Khóa trả phí phải chọn buổi bù hoặc hoàn phân bổ qua API khóa.");
             if (session.Status == SessionStatus.Cancelled) return 0;
             if (session.Status == SessionStatus.Completed) throw SchedulingException.Conflict("SESSION_COMPLETED", "Không thể hủy buổi đã hoàn tất.");
             if (session.AttendanceFinalizedAt != null || await classes.HasAnyAttendanceAsync(sessionId, token))
@@ -373,6 +405,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
 
     private static void ValidateClassDates(UpsertClassRequest request)
     {
+        if (!Enum.IsDefined(request.Level) || !Enum.IsDefined(request.Status)) throw new SchedulingException("INVALID_CLASS_ENUM", "Trình độ/trạng thái không hợp lệ.");
+        if (!Enum.IsDefined(request.BookingMode)) throw new SchedulingException("INVALID_BOOKING_MODE", "Mô hình quyền lợi không hợp lệ.");
         if (request.EndDate <= request.StartDate) throw new SchedulingException("INVALID_CLASS_DATES", "Ngày kết thúc phải sau ngày bắt đầu.");
         if (request.EndDate.DayNumber - request.StartDate.DayNumber > 366) throw new SchedulingException("DATE_RANGE_TOO_LARGE", "Khoảng lớp tối đa 366 ngày.");
         if (request.Status == ClassStatus.Cancelled) throw new SchedulingException("USE_SESSION_CANCEL", "Không hủy lớp qua DTO chỉnh sửa.");
@@ -389,10 +423,10 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     private static SessionConflict ToConflict(ResourceConflict x) => new(x.Date, x.StartTime, x.EndTime, x.Resource, x.ResourceId);
 
     private static ClassDto ToClassDto(Class x) => new(x.Id, x.Name, x.SportId, x.Sport.Name, x.RoomId, x.Room.Name, x.CoachId,
-        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.Description);
+        x.Coach?.FullName, x.Capacity, x.Level, x.StartDate, x.EndDate, x.Status, x.BookingMode, x.Description);
 
     private static SessionDto ToSessionDto(ClassSession x, Class c, string sport, string room, string? coach, int booked) =>
         new(x.Id, c.Id, x.ClassName, c.SportId, sport, x.Level, x.Date, x.StartTime, x.EndTime, x.RoomId, room, x.CoachId, coach,
-            x.Capacity, Math.Max(0, x.Capacity - booked), x.Status);
+            x.Capacity, Math.Max(0, x.Capacity - booked), x.Status, c.BookingMode);
     private static (int Page, int PageSize) Page(int page, int pageSize) => (Math.Max(1, page), pageSize is 10 or 20 or 50 ? pageSize : 20);
 }

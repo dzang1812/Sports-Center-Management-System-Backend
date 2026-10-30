@@ -8,7 +8,7 @@ public enum TrainingGoal { WeightLoss, MuscleGain, Endurance, GeneralHealth }
 public enum Gender { Male, Female, Other }
 public enum ClassStatus { Draft, Open, Closed, Cancelled }
 public enum SessionStatus { Scheduled, Completed, Cancelled }
-public enum EnrollmentStatus { Enrolled, Cancelled }
+public enum EnrollmentStatus { Enrolled, Cancelled, Confirmed }
 public enum BookingStatus { Confirmed, Cancelled, Completed }
 public enum SportStatus { Active, Inactive }
 public enum RoomStatus { Active, Maintenance, Inactive }

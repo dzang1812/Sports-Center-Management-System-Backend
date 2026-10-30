@@ -9,7 +9,7 @@ public record PlanSportDto(int Id, string Name);
 
 public record PlanDto(int Id, string Name, string? Description, int DurationDays, decimal Price, bool IsActive,
     int? SportId, bool IncludesClasses, int PtSessionCredits, bool IncludesGymAccess, int DurationMonths,
-    string PlanType, string? SportName, IReadOnlyList<PlanSportDto> AllowedSports, string? ImageUrl);
+    string PlanType, string? SportName, IReadOnlyList<PlanSportDto> AllowedSports, string? ImageUrl, bool WalletPtPackage);
 
 public record UpsertPlanRequest(
     [param: Required(ErrorMessage = "Tên gói là bắt buộc"), StringLength(100, MinimumLength = 2)] string Name,
@@ -63,6 +63,7 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
 
             var plan = new MembershipPlan();
             Apply(plan, request, name);
+            plan.WalletPtPackage = plan.PtSessionCredits > 0 && !plan.IncludesClasses && !plan.IncludesGymAccess;
             await repo.AddPlanAsync(plan, token);
             await transaction.SaveChangesAsync(token);
             await repo.AddAuditAsync(actorId, "MembershipPlan.Create", nameof(MembershipPlan), plan.Id, request, token);
@@ -88,6 +89,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
                 throw SchedulingException.Conflict("PLAN_ENTITLEMENTS_LOCKED",
                     "Không thể thay đổi quyền lợi của gói đã có người mua; hãy ngừng bán và tạo gói mới.");
 
+            if (plan.WalletPtPackage && (request.IncludesClasses || request.IncludesGymAccess == true || request.PtSessionCredits <= 0))
+                throw SchedulingException.Conflict("PLAN_PURCHASE_MODE_IMMUTABLE", "Gói PT trả ví không đổi thành dịch vụ khác; tạo gói mới.");
             var wasActive = plan.IsActive;
             Apply(plan, request, name);
             var action = wasActive && !plan.IsActive ? "MembershipPlan.Deactivate" : "MembershipPlan.Update";
@@ -102,6 +105,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         ValidateDuration(request);
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new SchedulingException("PLAN_NAME_REQUIRED", "Tên gói là bắt buộc.");
+        if (existing?.WalletPtPackage == true || existing is null && request.PtSessionCredits > 0 && !request.IncludesClasses && request.IncludesGymAccess != true)
+            SportsCenter.Services.Payments.WalletService.ValidateMoney(request.Price);
         if (request.Price < 0) throw new SchedulingException("PLAN_PRICE_INVALID", "Giá gói không được âm.");
         var includesGymAccess = request.IncludesGymAccess ?? existing?.IncludesGymAccess ?? false;
         if (!request.IncludesClasses && !includesGymAccess && request.PtSessionCredits <= 0)
@@ -163,7 +168,7 @@ internal static class MembershipPlanPresentation
         plan.Id, plan.Name, plan.Description, plan.DurationDays, plan.Price, plan.IsActive, plan.SportId,
         plan.IncludesClasses, plan.PtSessionCredits, plan.IncludesGymAccess, plan.DurationMonths,
         GetPlanType(plan), plan.Sport?.Name ?? sports.FirstOrDefault(x => x.Id == plan.SportId)?.Name,
-        GetAllowedSports(plan, sports).Select(x => new PlanSportDto(x.Id, x.Name)).ToList(), plan.ImageUrl);
+        GetAllowedSports(plan, sports).Select(x => new PlanSportDto(x.Id, x.Name)).ToList(), plan.ImageUrl, plan.WalletPtPackage);
 
     public static string GetPlanType(MembershipPlan plan) => plan.PtSessionCredits switch
     {
