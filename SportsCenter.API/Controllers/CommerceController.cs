@@ -26,6 +26,10 @@ public sealed class CoursesController(Flow2CommerceService service) : Controller
     private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Key => Request.Headers["Idempotency-Key"].FirstOrDefault() ?? "";
     [HttpGet] public Task<object> List(CancellationToken ct) => service.CoursesAsync(Actor, ct);
+    [HttpPost("preview"), Authorize(Roles = "Manager")]
+    public Task<CoursePreview> Preview(CreateCourseRequest body, CancellationToken ct) => service.PreviewCourseAsync(Actor, body, ct);
+    [HttpPost, Authorize(Roles = "Manager")]
+    public Task<CreatedCourse> Create(CreateCourseRequest body, CancellationToken ct) => service.CreateCourseAsync(Actor, body, Key, ct);
     [HttpGet("{id:int}")] public Task<object> Detail(int id, CancellationToken ct) => service.CourseAsync(Actor, id, ct);
     [HttpPut("{id:int}/terms"), Authorize(Roles = "Manager")]
     public Task<int> Terms(int id, CourseTermsRequest body, CancellationToken ct) => service.TermsAsync(Actor, id, body, Key, ct);

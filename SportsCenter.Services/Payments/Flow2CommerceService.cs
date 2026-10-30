@@ -32,7 +32,7 @@ public static class CommercePolicy
     }
 }
 
-public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService wallet, ISchedulingTransaction tx,
+public sealed partial class Flow2CommerceService(ICommerceRepository repo, WalletService wallet, ISchedulingTransaction tx,
     IScheduleUserRepository users, IScheduleConflictRepository conflicts, IAuditLogRepository audit,
     INotificationRepository notifications, IAppClock clock)
 {
@@ -56,16 +56,19 @@ public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService
     {
         var user = await ActiveAsync(actor, ct);
         var items = await repo.ListCoursesAsync(user.Role == UserRole.Manager, ct);
-        return items.Select(x => new { course = x, canEnroll = x.Status == ClassStatus.Open && x.PublishedAt != null && x.EnrollmentClosesAt > clock.UtcNow && x.Enrolled < x.Capacity });
+        return items.Select(x => new { course = x, canEnroll = x.Status == ClassStatus.Open && x.PublishedAt != null && x.EnrollmentClosesAt > clock.UtcNow && x.CourseStartsAt > clock.UtcNow && x.Enrolled < x.Capacity });
     }
 
     public async Task<object> CourseAsync(int actor, int id, CancellationToken ct)
     {
         var user = await ActiveAsync(actor, ct);
         var c = await CourseEntityAsync(id, ct);
-        if (user.Role != UserRole.Manager && c.PublishedAt == null) throw SchedulingException.NotFound("COURSE_NOT_FOUND", "Khóa chưa công bố.");
+        if (user.Role != UserRole.Manager && (c.PublishedAt == null || c.Status == ClassStatus.Draft)) throw SchedulingException.NotFound("COURSE_NOT_FOUND", "Khóa chưa công bố.");
         var sessions = await repo.ListCourseScheduleAsync(id, ct);
         return new { c.Id, c.Name, c.Description, c.Level, c.CourseFee, c.ExpectedSessions, c.EnrollmentClosesAt, c.PublishedAt, c.Status, c.Capacity, sessions,
+            durationWeeks = (int)Math.Ceiling((c.EndDate.DayNumber - c.StartDate.DayNumber + 1) / 7m),
+            sessionPrice = c.ExpectedSessions > 0 && c.CourseFee % c.ExpectedSessions == 0 ? (decimal?)(c.CourseFee / c.ExpectedSessions) : null,
+            validationIssues = CourseSetupIssues(c, sessions.Count(s => s.Status != SessionStatus.Cancelled)),
             policy = "Hủy toàn khóa trước khai giảng: hoàn số tiền thực trả chưa hoàn. Sau khai giảng: liên hệ hỗ trợ. Nghỉ một buổi không hoàn tiền. Trung tâm hủy: bù buổi hoặc hoàn phân bổ snapshot." };
     }
 
@@ -108,6 +111,7 @@ public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService
             {
                 var publishedSessions = await ValidateCourseAsync(c, token);
                 c.CourseStartsAt ??= clock.ToUtc(publishedSessions[0].Date, publishedSessions[0].StartTime);
+                CommercePolicy.RequireBefore(clock.UtcNow, c.CourseStartsAt.Value);
                 CommercePolicy.RequireBefore(clock.UtcNow, c.EnrollmentClosesAt!.Value);
                 c.PublishedAt ??= clock.UtcNow;
             }
@@ -140,6 +144,7 @@ public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService
             if (c.EnrollmentClosesAt == null) throw SchedulingException.Conflict("COURSE_SCHEDULE_INCOMPLETE", "Chưa có hạn đăng ký.");
             CommercePolicy.RequireBefore(clock.UtcNow, c.EnrollmentClosesAt.Value);
             var sessions = await ValidateCourseAsync(c, token);
+            CommercePolicy.RequireBefore(clock.UtcNow, c.CourseStartsAt ?? clock.ToUtc(sessions[0].Date, sessions[0].StartTime));
             var old = await repo.FindMemberEnrollmentAsync(id, member, token);
             if (old?.Status == EnrollmentStatus.Confirmed) throw SchedulingException.Conflict("ENROLLMENT_EXISTS", "Đã có đăng ký khóa hiệu lực.");
             var count = await repo.CountConfirmedPaidEnrollmentsAsync(id, token);
@@ -155,7 +160,9 @@ public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService
             CommercePolicy.RequireBefore(clock.UtcNow, c.EnrollmentClosesAt.Value);
             EnsureExpectedPrice(request.ExpectedPrice, c.CourseFee);
             var order = await PurchaseAsync(member, actor, CommerceOrderKind.Course, c.CourseFee,
-                new { c.Id, c.Name, c.SportId, c.ExpectedSessions, c.EnrollmentClosesAt, Policy = "course-v1", Sessions = sessions.Select(x => new { x.Id, x.Date, x.StartTime, x.EndTime }).ToArray() }, token);
+                new { c.Id, c.Name, c.SportId, c.ExpectedSessions, c.CourseFee,
+                    SessionPrice = c.ExpectedSessions > 0 && c.CourseFee % c.ExpectedSessions == 0 ? (decimal?)(c.CourseFee / c.ExpectedSessions) : null,
+                    c.StartDate, c.EndDate, c.EnrollmentClosesAt, Policy = "course-v1", Sessions = sessions.Select(x => new { x.Id, x.Date, x.StartTime, x.EndTime }).ToArray() }, token);
             var enrollment = old ?? new ClassEnrollment { ClassId = id, MemberId = member };
             if (old == null) repo.Add(enrollment);
             enrollment.OrderId = order.Id; enrollment.Status = EnrollmentStatus.Confirmed; enrollment.EnrolledAt = clock.UtcNow; enrollment.CancelledAt = null;
@@ -392,11 +399,11 @@ public sealed class Flow2CommerceService(ICommerceRepository repo, WalletService
 
     private async Task<List<ClassSession>> ValidateCourseAsync(Class c, CancellationToken ct)
     {
-        WalletService.ValidateMoney(c.CourseFee);
         var sessions = await repo.ListActiveCourseSessionsWithRoomsAsync(c.Id, ct);
-        if (sessions.Count != c.ExpectedSessions || sessions.Count == 0 || c.EnrollmentClosesAt is null)
-            throw SchedulingException.Conflict("COURSE_SCHEDULE_INCOMPLETE", "Số buổi thực tế chưa khớp công bố hoặc thiếu hạn đăng ký.");
-        if (c.EnrollmentClosesAt > clock.ToUtc(sessions[0].Date, sessions[0].StartTime)) throw SchedulingException.Conflict("INVALID_ENROLLMENT_CUTOFF", "Hạn đăng ký muộn hơn buổi đầu.");
+        var issue = CourseSetupIssues(c, sessions.Count).FirstOrDefault();
+        if (issue != null) throw new SchedulingException(issue.ErrorCode, issue.Message, 409, issue);
+        WalletService.ValidateMoney(c.CourseFee);
+        if (c.EnrollmentClosesAt > clock.ToUtc(sessions[0].Date, sessions[0].StartTime)) throw new SchedulingException("COURSE_CUTOFF_AFTER_START", "Hạn đăng ký không được sau buổi học đầu tiên.", 409, new { field = "enrollmentClosesAt" });
         var sport = await repo.GetSportAsync(c.SportId, ct);
         if (sport.Status != SportStatus.Active || !sport.HasClasses) throw SchedulingException.Conflict("SPORT_UNAVAILABLE", "Bộ môn không hợp lệ.");
         foreach (var s in sessions)

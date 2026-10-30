@@ -12,7 +12,7 @@ public record UpsertClassRequest(
     [param: Required, StringLength(150, MinimumLength = 2)] string Name,
     int SportId, int RoomId, int? CoachId,
     [param: Range(1, 10000)] int Capacity, Level Level, DateOnly StartDate, DateOnly EndDate,
-    [param: StringLength(1000)] string? Description, ClassStatus Status = ClassStatus.Draft, ClassBookingMode BookingMode = ClassBookingMode.LegacySession);
+    [param: StringLength(1000)] string? Description, ClassStatus? Status = null, ClassBookingMode BookingMode = ClassBookingMode.LegacySession);
 public record PublicClassDto(int Id, string Name, string Sport, Level Level, string? Description,
     DateOnly StartDate, DateOnly EndDate, List<string> ImageUrls);
 public record AssignCoachRequest(int CoachId);
@@ -84,7 +84,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             {
                 Name = request.Name.Trim(), Description = request.Description?.Trim(), SportId = sport.Id, RoomId = room.Id,
                 CoachId = request.CoachId, Capacity = request.Capacity, Level = request.Level, StartDate = request.StartDate,
-                EndDate = request.EndDate, Status = request.BookingMode == ClassBookingMode.CourseEnrollment ? ClassStatus.Draft : request.Status, BookingMode = request.BookingMode,
+                EndDate = request.EndDate, Status = request.BookingMode == ClassBookingMode.CourseEnrollment ? ClassStatus.Draft : request.Status ?? ClassStatus.Draft, BookingMode = request.BookingMode,
             };
             classes.AddClass(entity);
             await transaction.SaveChangesAsync(token);
@@ -107,7 +107,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (entity.BookingMode != request.BookingMode) throw SchedulingException.Conflict("BOOKING_MODE_IMMUTABLE", "Không chuyển mô hình quyền lợi của lớp cũ.");
             if (entity.BookingMode == ClassBookingMode.CourseEnrollment)
             {
-                if (request.Status != entity.Status) throw SchedulingException.Conflict("USE_COURSE_PUBLISH", "Dùng thao tác mở/đóng khóa đã kiểm tra lịch.");
+                if (request.Status.HasValue && request.Status != entity.Status) throw SchedulingException.Conflict("USE_COURSE_PUBLISH", "Dùng thao tác mở/đóng khóa đã kiểm tra lịch.");
                 if (request.Capacity != entity.Capacity || request.Level != entity.Level)
                     throw SchedulingException.Conflict("COURSE_STRUCTURE_IMMUTABLE", "Không thay đổi sức chứa/trình độ khóa qua form legacy.");
             }
@@ -162,7 +162,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             }
             entity.Name = requestedName; entity.Description = request.Description?.Trim(); entity.SportId = sport.Id;
             entity.RoomId = room.Id; entity.Capacity = request.Capacity; entity.Level = request.Level;
-            entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status;
+            entity.StartDate = request.StartDate; entity.EndDate = request.EndDate; entity.Status = request.Status ?? entity.Status;
             audit.AddAudit(actorId, "Class.Update", nameof(Class), id, request);
             await transaction.SaveChangesAsync(token);
             return await GetClassAsync(id, token);
@@ -405,7 +405,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
 
     private static void ValidateClassDates(UpsertClassRequest request)
     {
-        if (!Enum.IsDefined(request.Level) || !Enum.IsDefined(request.Status)) throw new SchedulingException("INVALID_CLASS_ENUM", "Trình độ/trạng thái không hợp lệ.");
+        if (!Enum.IsDefined(request.Level) || request.Status.HasValue && !Enum.IsDefined(request.Status.Value)) throw new SchedulingException("INVALID_CLASS_ENUM", "Trình độ/trạng thái không hợp lệ.");
         if (!Enum.IsDefined(request.BookingMode)) throw new SchedulingException("INVALID_BOOKING_MODE", "Mô hình quyền lợi không hợp lệ.");
         if (request.EndDate <= request.StartDate) throw new SchedulingException("INVALID_CLASS_DATES", "Ngày kết thúc phải sau ngày bắt đầu.");
         if (request.EndDate.DayNumber - request.StartDate.DayNumber > 366) throw new SchedulingException("DATE_RANGE_TOO_LARGE", "Khoảng lớp tối đa 366 ngày.");
