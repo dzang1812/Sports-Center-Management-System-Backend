@@ -67,6 +67,7 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
             AvatarUrl = r.AvatarUrl,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
             MustChangePassword = true,
+            EmailVerified = true, // manager-created staff skip the email verification gate
         };
         if (r.Role == UserRole.Coach)
             user.CoachProfile = new CoachProfile { Sports = await FindSports(r.Specialties) };
