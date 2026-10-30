@@ -1,6 +1,9 @@
 using System.Threading;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SportsCenter.Repository.Entities;
+using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.API;
@@ -9,11 +12,10 @@ public sealed class Flow2TimeRulesState : IFlow2TimeRules
 {
     private int enforceTimeRules;
 
-    public Flow2TimeRulesState(IWebHostEnvironment environment, IConfiguration configuration)
+    public Flow2TimeRulesState(IConfiguration configuration)
     {
-        IsAvailable = environment.IsDevelopment() &&
-            configuration.GetValue<bool>("Flow2TimeRules:AllowGlobalSwitch");
-        var configuredDefault = configuration.GetValue<bool?>("Flow2TimeRules:EnforceTimeRules") ?? false;
+        IsAvailable = configuration.GetValue<bool>("Flow2TimeRules:AllowGlobalSwitch");
+        var configuredDefault = configuration.GetValue<bool?>("Flow2TimeRules:EnforceTimeRules") ?? true;
         enforceTimeRules = IsAvailable && !configuredDefault ? 0 : 1;
     }
 
@@ -33,7 +35,8 @@ public sealed record UpdateFlow2TimeRulesRequest(bool? EnforceTimeRules);
 [ApiController]
 [Route("api/dev/flow2-time-rules")]
 [Authorize]
-public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : ControllerBase
+public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules, IScheduleUserRepository users,
+    ILogger<Flow2TimeRulesController> logger) : ControllerBase
 {
     private static readonly string[] BypassedTimeGuards =
     [
@@ -64,8 +67,16 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : Contro
 
     [HttpPut]
     [Authorize(Roles = "Manager")]
-    public IActionResult Put(UpdateFlow2TimeRulesRequest request)
+    public async Task<IActionResult> Put(UpdateFlow2TimeRulesRequest request, CancellationToken ct)
     {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId) ||
+            !await users.IsActiveInRoleAsync(actorId, UserRole.Manager, ct))
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                errorCode = "ACTOR_INACTIVE",
+                message = "Chỉ Manager đang hoạt động được thay đổi ràng buộc thời gian.",
+            });
+
         if (request.EnforceTimeRules is not { } enforceTimeRules)
             return BadRequest(new
             {
@@ -77,11 +88,13 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : Contro
             return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 errorCode = "FLOW2_TIME_RULES_SWITCH_DISABLED",
-                message = "Global Flow 2 time rules switch is only available when explicitly enabled in Development.",
+                message = "Global Flow 2 time rules switch is disabled by server configuration.",
                 available = false,
                 enforceTimeRules = true,
             });
 
+        logger.LogInformation("Manager {ActorId} set global Flow 2 EnforceTimeRules to {EnforceTimeRules}",
+            actorId, enforceTimeRules);
         return Ok(Status());
     }
 
@@ -89,8 +102,9 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules) : Contro
     {
         available = timeRules.IsAvailable,
         enforceTimeRules = timeRules.EnforceTimeRules,
-        canManage = User.IsInRole("Manager"),
+        canManage = timeRules.IsAvailable && User.IsInRole("Manager"),
         scope = "global",
+        resetsOnRestart = true,
         bypassedTimeGuards = BypassedTimeGuards,
         preservedIntegrityGuards = PreservedIntegrityGuards,
     };
