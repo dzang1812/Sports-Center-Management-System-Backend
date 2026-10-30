@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using SportsCenter.Services.Payments;
+using SportsCenter.Services.Membership;
 using Microsoft.Extensions.Options;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
@@ -29,6 +30,8 @@ public interface IPtService
     Task<List<PtCoachDto>> ListCoachesAsync(int? sportId, CancellationToken ct);
     Task<List<PtSlotDto>> ListSlotsAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<PtBookingDto> BookAsync(int actorId, CreatePtBookingRequest request, CancellationToken ct, string? idempotencyKey = null);
+    Task<PtCounterCheckoutDto> CounterCheckoutAsync(int actorId, PtCounterCheckoutRequest request, string key, CancellationToken ct);
+    Task<PtBookingDto> CompleteCounterCheckoutAsync(int actorId, int paymentId, CancellationToken ct);
     Task CancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct);
     Task<PtBookingDto> RescheduleAsync(int actorId, int bookingId, ReschedulePtBookingRequest request, CancellationToken ct);
     Task CoachCancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct);
@@ -37,9 +40,10 @@ public interface IPtService
         int? memberId, int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct);
 }
 
-public sealed class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
+public sealed partial class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
-    ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options, WalletService wallet, Flow2CommerceService commerce) : IPtService
+    ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options, WalletService wallet, Flow2CommerceService commerce,
+    ICommerceRepository commerceRepo, IMembershipRepository membershipRepo, ISubscriptionService payments) : IPtService
 {
     private readonly SchedulingOptions settings = options.Value;
 
@@ -130,46 +134,49 @@ public sealed class PtService(IPtRepository pt, IScheduleConflictRepository sche
     {
         if (!Enum.IsDefined(request.FundingSource)) throw new SchedulingException("INVALID_FUNDING_SOURCE", "Nguồn thanh toán không hợp lệ.");
         var memberId = await ResolveTargetMemberAsync(actorId, request.MemberId, ct);
-        async Task<PtBookingDto> Work(CancellationToken token)
-        {
-            await LockBookingResourcesAsync(memberId, request.CoachId, request.SportId, request.RoomId, token);
-            int? subscriptionId = null;
-            CommerceOrder? order = null;
-            if (request.FundingSource == PtFundingSource.Wallet)
-            {
-                await ValidateBookingTargetAsync(memberId, request.CoachId, request.SportId, request.Date, request.StartTime, request.RoomId, null, token);
-                if (clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow) throw SchedulingException.Conflict("BOOKING_CLOSED", "Không thanh toán buổi đã bắt đầu.");
-                var sport = await catalog.GetSportAsync(request.SportId, token);
-                if (sport?.PtSinglePrice is not { } price) throw SchedulingException.Conflict("PT_PRICE_UNSET", "Trung tâm chưa cấu hình giá PT lẻ.");
-                Flow2CommerceService.EnsureExpectedPrice(request.ExpectedPrice, price);
-                order = await commerce.PurchaseAsync(memberId, actorId, CommerceOrderKind.PtSingle, price,
-                    new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token);
-            }
-            else
-            {
-                subscriptionId = await ValidateNewBookingAsync(memberId, request.CoachId, request.SportId, request.Date, request.StartTime, request.RoomId, null, token);
-                await ConsumeCreditAsync(subscriptionId.Value, token);
-            }
-            var booking = NewBooking(actorId, memberId, subscriptionId, request);
-            booking.FundingSource = request.FundingSource == PtFundingSource.Wallet ? PtFundingSource.Wallet
-                : (await subscriptions.ListForMemberAndSportAsync(memberId, request.SportId, token)).Single(x => x.Id == subscriptionId).IsWalletPurchase
-                    ? PtFundingSource.PackageCredit : PtFundingSource.LegacyCredit;
-            if (booking.FundingSource != PtFundingSource.LegacyCredit && clock.ToUtc(booking.Date, booking.StartTime) <= clock.UtcNow)
-                throw SchedulingException.Conflict("BOOKING_CLOSED", "Không sử dụng quyền đã thanh toán cho buổi quá khứ.");
-            booking.FundingOrderId = order?.Id;
-            pt.AddBooking(booking); await transaction.SaveChangesAsync(token);
-            audit.AddAudit(actorId, "PtBooking.Create", nameof(PtBooking), booking.Id,
-                new { TargetMemberId = memberId, booking.SubscriptionId, booking.FundingSource, booking.FundingOrderId, booking.CoachId, booking.Date, booking.StartTime });
-            notifications.AddNotification(memberId, actorId, NotificationType.Booking, "Đặt lịch PT thành công",
-                $"Lịch PT ngày {booking.Date:yyyy-MM-dd} lúc {booking.StartTime:HH:mm} đã xác nhận.", $"pt-booking:{booking.Id}:created:{memberId}");
-            notifications.AddNotification(booking.CoachId, actorId, NotificationType.Booking, "Có lịch PT mới",
-                $"Lịch PT ngày {booking.Date:yyyy-MM-dd} lúc {booking.StartTime:HH:mm} đã xác nhận.", $"pt-booking:{booking.Id}:created:coach:{booking.CoachId}");
-            await transaction.SaveChangesAsync(token);
-            return ToDto(booking);
-        }
+        Task<PtBookingDto> Work(CancellationToken token) => BookCoreAsync(actorId, memberId, request, token);
         return request.FundingSource == PtFundingSource.LegacyCredit && string.IsNullOrWhiteSpace(idempotencyKey)
             ? await transaction.ExecuteAsync(Work, ct)
             : await wallet.ExecuteAsync(actorId, "pt-book", idempotencyKey ?? "", request, Work, ct);
+    }
+
+    // Called within the existing transaction/idempotency boundary, including counter cash + booking.
+    private async Task<PtBookingDto> BookCoreAsync(int actorId, int memberId, CreatePtBookingRequest request, CancellationToken token)
+    {
+        await LockBookingResourcesAsync(memberId, request.CoachId, request.SportId, request.RoomId, token);
+        int? subscriptionId = null;
+        CommerceOrder? order = null;
+        if (request.FundingSource == PtFundingSource.Wallet)
+        {
+            await ValidateBookingTargetAsync(memberId, request.CoachId, request.SportId, request.Date, request.StartTime, request.RoomId, null, token);
+            if (clock.ToUtc(request.Date, request.StartTime) <= clock.UtcNow) throw SchedulingException.Conflict("BOOKING_CLOSED", "Không thanh toán buổi đã bắt đầu.");
+            var sport = await catalog.GetSportAsync(request.SportId, token);
+            if (sport?.PtSinglePrice is not { } price) throw SchedulingException.Conflict("PT_PRICE_UNSET", "Trung tâm chưa cấu hình giá PT lẻ.");
+            Flow2CommerceService.EnsureExpectedPrice(request.ExpectedPrice, price);
+            order = await commerce.PurchaseAsync(memberId, actorId, CommerceOrderKind.PtSingle, price,
+                new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token);
+        }
+        else
+        {
+            subscriptionId = await ValidateNewBookingAsync(memberId, request.CoachId, request.SportId, request.Date, request.StartTime, request.RoomId, null, token);
+            await ConsumeCreditAsync(subscriptionId.Value, token);
+        }
+        var booking = NewBooking(actorId, memberId, subscriptionId, request);
+        booking.FundingSource = request.FundingSource == PtFundingSource.Wallet ? PtFundingSource.Wallet
+            : (await subscriptions.ListForMemberAndSportAsync(memberId, request.SportId, token)).Single(x => x.Id == subscriptionId).IsWalletPurchase
+                ? PtFundingSource.PackageCredit : PtFundingSource.LegacyCredit;
+        if (booking.FundingSource != PtFundingSource.LegacyCredit && clock.ToUtc(booking.Date, booking.StartTime) <= clock.UtcNow)
+            throw SchedulingException.Conflict("BOOKING_CLOSED", "Không sử dụng quyền đã thanh toán cho buổi quá khứ.");
+        booking.FundingOrderId = order?.Id;
+        pt.AddBooking(booking); await transaction.SaveChangesAsync(token);
+        audit.AddAudit(actorId, "PtBooking.Create", nameof(PtBooking), booking.Id,
+            new { TargetMemberId = memberId, booking.SubscriptionId, booking.FundingSource, booking.FundingOrderId, booking.CoachId, booking.Date, booking.StartTime });
+        notifications.AddNotification(memberId, actorId, NotificationType.Booking, "Đặt lịch PT thành công",
+            $"Lịch PT ngày {booking.Date:yyyy-MM-dd} lúc {booking.StartTime:HH:mm} đã xác nhận.", $"pt-booking:{booking.Id}:created:{memberId}");
+        notifications.AddNotification(booking.CoachId, actorId, NotificationType.Booking, "Có lịch PT mới",
+            $"Lịch PT ngày {booking.Date:yyyy-MM-dd} lúc {booking.StartTime:HH:mm} đã xác nhận.", $"pt-booking:{booking.Id}:created:coach:{booking.CoachId}");
+        await transaction.SaveChangesAsync(token);
+        return ToDto(booking);
     }
 
     public async Task CancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct)
