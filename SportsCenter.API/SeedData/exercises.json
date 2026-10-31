@@ -7,7 +7,8 @@
   "reps": "6-10",
   "rest": 120,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013044/gym-support/exercises/images/barbell-bench-press_t9jebt.png"
  },
  {
   "name": "Dumbbell Bench Press",
@@ -17,7 +18,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013107/gym-support/exercises/images/dumbbell-bench-press_duiick.png"
  },
  {
   "name": "Incline Barbell Press",
@@ -27,7 +29,8 @@
   "reps": "6-10",
   "rest": 120,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013151/gym-support/exercises/images/incline-barbell-press_gun4zw.png"
  },
  {
   "name": "Incline Dumbbell Press",
@@ -37,7 +40,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013156/gym-support/exercises/images/incline-dumbbell-press_tpuwj0.webp"
  },
  {
   "name": "Decline Bench Press",
@@ -47,7 +51,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực dưới(Abdominal head). Cơ phụ: Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Ngực dưới(Abdominal head). Cơ phụ: Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013101/gym-support/exercises/images/decline-bench-press_pafwk9.webp"
  },
  {
   "name": "Machine Chest Press",
@@ -57,7 +62,8 @@
   "reps": "10-12",
   "rest": 75,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013168/gym-support/exercises/images/machine-chest-press_dri92d.webp"
  },
  {
   "name": "Dumbbell Fly",
@@ -67,7 +73,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013110/gym-support/exercises/images/dumbbell-fly_bygcl8.webp"
  },
  {
   "name": "Pec Deck Fly",
@@ -77,7 +84,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013185/gym-support/exercises/images/pec-deck-fly_ae0up3.webp"
  },
  {
   "name": "Cable Crossover",
@@ -87,7 +95,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực dưới(Abdominal head)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực dưới(Abdominal head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013065/gym-support/exercises/images/cable-crossover_rzrdvv.webp"
  },
  {
   "name": "Push-Up",
@@ -97,7 +106,8 @@
   "reps": "10-20",
   "rest": 60,
   "muscleGroup": "Cơ Ngực (Chest)",
-  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013196/gym-support/exercises/images/push-up_jzqrs4.webp"
  },
  {
   "name": "Pull-Up",
@@ -107,7 +117,8 @@
   "reps": "5-10",
   "rest": 120,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii), Lưng giữa (Rhomboids)"
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii), Lưng giữa (Rhomboids)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013194/gym-support/exercises/images/pull-up_eoqnht.webp"
  },
  {
   "name": "Chin-Up",
@@ -117,7 +128,8 @@
   "reps": "5-10",
   "rest": 120,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013084/gym-support/exercises/images/chin-up_eh10aa.webp"
  },
  {
   "name": "Wide-Grip Lat Pulldown",
@@ -127,7 +139,8 @@
   "reps": "8-12",
   "rest": 75,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013269/gym-support/exercises/images/wide-grip-lat-pulldown_b3lkrx.webp"
  },
  {
   "name": "Neutral-Grip Lat Pulldown",
@@ -147,7 +160,8 @@
   "reps": "6-10",
   "rest": 120,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)"
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013046/gym-support/exercises/images/barbell-bent-over-row_cvk6mt.webp"
  },
  {
   "name": "Pendlay Row",
@@ -157,7 +171,8 @@
   "reps": "5-8",
   "rest": 120,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)"
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013187/gym-support/exercises/images/pendlay-row_soeu1d.webp"
  },
  {
   "name": "T-Bar Row",
@@ -167,7 +182,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats),  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats),  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013262/gym-support/exercises/images/t-bar-row_cj1dt1.webp"
  },
  {
   "name": "Seated Cable Row",
@@ -177,7 +193,8 @@
   "reps": "8-12",
   "rest": 75,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Cơ cánh tay (Brachialis)"
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Cơ cánh tay (Brachialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013223/gym-support/exercises/images/seated-cable-row_huoiyv.webp"
  },
  {
   "name": "One-Arm Dumbbell Row",
@@ -187,7 +204,8 @@
   "reps": "8-12 each side",
   "rest": 75,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Lưng giữa (Rhomboids),  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Lưng giữa (Rhomboids),  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013177/gym-support/exercises/images/one-arm-dumbbell-row_gu5g8g.webp"
  },
  {
   "name": "Chest-Supported Row",
@@ -197,7 +215,8 @@
   "reps": "10-12",
   "rest": 75,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Vai sau (Posterior Deltoid), Lưng xô (Latissimus Dorsi - Lats)"
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Vai sau (Posterior Deltoid), Lưng xô (Latissimus Dorsi - Lats)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013082/gym-support/exercises/images/chest-supported-row_uum4ay.webp"
  },
  {
   "name": "Straight-Arm Pulldown",
@@ -207,7 +226,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Tròn lớn (Teres Major)"
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Tròn lớn (Teres Major)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013251/gym-support/exercises/images/straight-arm-pulldown_mds7dc.webp"
  },
  {
   "name": "Conventional Deadlift",
@@ -217,7 +237,8 @@
   "reps": "3-6",
   "rest": 180,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Đùi sau(Hamstrings), Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Đùi sau(Hamstrings), Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013091/gym-support/exercises/images/conventional-deadlift_kz3e56.webp"
  },
  {
   "name": "Rack Pull",
@@ -227,7 +248,8 @@
   "reps": "5-8",
   "rest": 150,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013199/gym-support/exercises/images/rack-pull_uui4fu.webp"
  },
  {
   "name": "Back Extension",
@@ -237,7 +259,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013035/gym-support/exercises/images/back-extension_wgbpqd.webp"
  },
  {
   "name": "Dumbbell Shrug",
@@ -247,7 +270,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cơ Lưng (Back)",
-  "description": "Cơ chính: Cầu vai (Trapezius - Traps). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis)"
+  "description": "Cơ chính: Cầu vai (Trapezius - Traps). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013122/gym-support/exercises/images/dumbbell-shrug_brte5l.webp"
  },
  {
   "name": "Barbell Overhead Press",
@@ -257,7 +281,8 @@
   "reps": "6-10",
   "rest": 120,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013054/gym-support/exercises/images/barbell-overhead-press_fyluau.webp"
  },
  {
   "name": "Dumbbell Shoulder Press",
@@ -267,7 +292,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013120/gym-support/exercises/images/dumbbell-shoulder-press_ccbaev.webp"
  },
  {
   "name": "Arnold Press",
@@ -277,7 +303,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid)"
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013033/gym-support/exercises/images/arnold-press_t4uhty.webp"
  },
  {
   "name": "Landmine Press",
@@ -287,7 +314,8 @@
   "reps": "8-12 each side",
   "rest": 75,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head), Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head), Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013158/gym-support/exercises/images/landmine-press_olyxso.webp"
  },
  {
   "name": "Dumbbell Lateral Raise",
@@ -297,7 +325,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)"
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013117/gym-support/exercises/images/dumbbell-lateral-raise_cayhfb.webp"
  },
  {
   "name": "Cable Lateral Raise",
@@ -307,7 +336,8 @@
   "reps": "12-15 each side",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)"
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013077/gym-support/exercises/images/cable-lateral-raise_oubzxn.webp"
  },
  {
   "name": "Machine Lateral Raise",
@@ -317,7 +347,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai giữa (Lateral Deltoid)"
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013170/gym-support/exercises/images/machine-lateral-raise_gj4fz1.webp"
  },
  {
   "name": "Dumbbell Front Raise",
@@ -327,7 +358,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head)"
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013112/gym-support/exercises/images/dumbbell-front-raise_z8qdts.webp"
  },
  {
   "name": "Rear Delt Fly",
@@ -337,7 +369,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)"
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013201/gym-support/exercises/images/rear-delt-fly_n6vaza.webp"
  },
  {
   "name": "Reverse Pec Deck",
@@ -347,7 +380,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)"
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013210/gym-support/exercises/images/reverse-pec-deck_jeqp7t.webp"
  },
  {
   "name": "Face Pull",
@@ -357,7 +391,8 @@
   "reps": "12-15",
   "rest": 60,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Cơ chóp xoay(Rotator Cuff), Cầu vai (Trapezius - Traps)"
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Cơ chóp xoay(Rotator Cuff), Cầu vai (Trapezius - Traps)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013126/gym-support/exercises/images/face-pull_ulxsw7.webp"
  },
  {
   "name": "Cable External Rotation",
@@ -367,7 +402,8 @@
   "reps": "12-15 each side",
   "rest": 45,
   "muscleGroup": "Cơ vai (Deltoids)",
-  "description": "Cơ chính: Cơ chóp xoay(Rotator Cuff). Cơ phụ: Vai sau (Posterior Deltoid)"
+  "description": "Cơ chính: Cơ chóp xoay(Rotator Cuff). Cơ phụ: Vai sau (Posterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013072/gym-support/exercises/images/cable-external-rotation_jfseok.webp"
  },
  {
   "name": "Barbell Curl",
@@ -377,7 +413,8 @@
   "reps": "8-12",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013048/gym-support/exercises/images/barbell-curl_gkzm8t.webp"
  },
  {
   "name": "EZ-Bar Curl",
@@ -387,7 +424,8 @@
   "reps": "8-12",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013124/gym-support/exercises/images/ez-bar-curl_hfksnz.webp"
  },
  {
   "name": "Alternating Dumbbell Curl",
@@ -397,7 +435,8 @@
   "reps": "10-12 each side",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013031/gym-support/exercises/images/alternating-dumbbell-curl_dif8j5.webp"
  },
  {
   "name": "Incline Dumbbell Curl",
@@ -407,7 +446,8 @@
   "reps": "10-12",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013153/gym-support/exercises/images/incline-dumbbell-curl_lolkts.webp"
  },
  {
   "name": "Hammer Curl",
@@ -417,7 +457,8 @@
   "reps": "10-12",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính: Cơ cánh tay (Brachialis). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis),  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính: Cơ cánh tay (Brachialis). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis),  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013142/gym-support/exercises/images/hammer-curl_dcxu8q.webp"
  },
  {
   "name": "Preacher Curl",
@@ -427,7 +468,8 @@
   "reps": "8-12",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013192/gym-support/exercises/images/preacher-curl_fxen2m.webp"
  },
  {
   "name": "Cable Curl",
@@ -437,7 +479,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013070/gym-support/exercises/images/cable-curl_dhdppw.webp"
  },
  {
   "name": "Concentration Curl",
@@ -447,7 +490,8 @@
   "reps": "10-12 each side",
   "rest": 60,
   "muscleGroup": "Tay trước (Biceps)",
-  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii)"
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013088/gym-support/exercises/images/concentration-curl_iyrogx.webp"
  },
  {
   "name": "Close-Grip Bench Press",
@@ -457,7 +501,8 @@
   "reps": "6-10",
   "rest": 90,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực giữa(Sternal head), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực giữa(Sternal head), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013086/gym-support/exercises/images/close-grip-bench-press_odgcxz.webp"
  },
  {
   "name": "Straight-Bar Pushdown",
@@ -467,7 +512,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013253/gym-support/exercises/images/straight-bar-pushdown_ogu1i5.webp"
  },
  {
   "name": "Rope Pushdown",
@@ -477,7 +523,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013219/gym-support/exercises/images/rope-pushdown_x31db9.webp"
  },
  {
   "name": "Overhead Dumbbell Extension",
@@ -487,7 +534,8 @@
   "reps": "10-12",
   "rest": 60,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013182/gym-support/exercises/images/overhead-dumbbell-extension_cxkjru.webp"
  },
  {
   "name": "Overhead Cable Extension",
@@ -497,7 +545,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013180/gym-support/exercises/images/overhead-cable-extension_zzdles.webp"
  },
  {
   "name": "Skull Crusher",
@@ -507,7 +556,8 @@
   "reps": "8-12",
   "rest": 75,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu ngoài tay sau (Lateral head)"
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu ngoài tay sau (Lateral head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013240/gym-support/exercises/images/skull-crusher_bg1dzn.webp"
  },
  {
   "name": "Bench Dip",
@@ -517,7 +567,8 @@
   "reps": "8-15",
   "rest": 60,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực dưới(Abdominal head), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực dưới(Abdominal head), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013058/gym-support/exercises/images/bench-dip_exbxgn.webp"
  },
  {
   "name": "Dumbbell Kickback",
@@ -527,7 +578,8 @@
   "reps": "12-15 each side",
   "rest": 45,
   "muscleGroup": "Tay sau (Triceps Brachii)",
-  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu dài tay sau (Long head)"
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu dài tay sau (Long head)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013115/gym-support/exercises/images/dumbbell-kickback_aqx4og.webp"
  },
  {
   "name": "Barbell Wrist Curl",
@@ -537,7 +589,8 @@
   "reps": "12-20",
   "rest": 45,
   "muscleGroup": "Cẳng tay (Forearms)",
-  "description": "Cơ chính: Cơ ngửa/gập (Flexors)"
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013056/gym-support/exercises/images/barbell-wrist-curl_mthkur.webp"
  },
  {
   "name": "Reverse Wrist Curl",
@@ -547,7 +600,8 @@
   "reps": "12-20",
   "rest": 45,
   "muscleGroup": "Cẳng tay (Forearms)",
-  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis)"
+  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013213/gym-support/exercises/images/reverse-wrist-curl_lqe5fd.webp"
  },
  {
   "name": "Reverse Barbell Curl",
@@ -557,7 +611,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cẳng tay (Forearms)",
-  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis). Cơ phụ: Cơ cánh tay (Brachialis)"
+  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis). Cơ phụ: Cơ cánh tay (Brachialis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013203/gym-support/exercises/images/reverse-barbell-curl_qrk2ys.webp"
  },
  {
   "name": "Farmer's Carry",
@@ -567,7 +622,8 @@
   "reps": "30-45 seconds",
   "rest": 75,
   "muscleGroup": "Cẳng tay (Forearms)",
-  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013129/gym-support/exercises/images/farmer-s-carry_hev09k.webp"
  },
  {
   "name": "Dead Hang",
@@ -577,7 +633,8 @@
   "reps": "20-45 seconds",
   "rest": 60,
   "muscleGroup": "Cẳng tay (Forearms)",
-  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats)"
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013099/gym-support/exercises/images/dead-hang_xke7um.webp"
  },
  {
   "name": "Barbell Back Squat",
@@ -587,7 +644,8 @@
   "reps": "5-10",
   "rest": 150,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013040/gym-support/exercises/images/barbell-back-squat_gpemnv.webp"
  },
  {
   "name": "Front Squat",
@@ -597,7 +655,8 @@
   "reps": "5-8",
   "rest": 150,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013131/gym-support/exercises/images/front-squat_fmo3aj.webp"
  },
  {
   "name": "Hack Squat",
@@ -607,7 +666,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013140/gym-support/exercises/images/hack-squat_zmghbg.webp"
  },
  {
   "name": "Leg Press",
@@ -617,7 +677,8 @@
   "reps": "8-15",
   "rest": 120,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013163/gym-support/exercises/images/leg-press_sl3uk3.webp"
  },
  {
   "name": "Bulgarian Split Squat",
@@ -627,7 +688,8 @@
   "reps": "8-12 each side",
   "rest": 90,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013063/gym-support/exercises/images/bulgarian-split-squat_ejaiph.webp"
  },
  {
   "name": "Walking Lunge",
@@ -637,7 +699,8 @@
   "reps": "10-16 steps",
   "rest": 90,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013265/gym-support/exercises/images/walking-lunge_f5lje7.webp"
  },
  {
   "name": "Reverse Lunge",
@@ -647,7 +710,8 @@
   "reps": "8-12 each side",
   "rest": 75,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013208/gym-support/exercises/images/reverse-lunge_mxb0sg.webp"
  },
  {
   "name": "Step-Up",
@@ -657,7 +721,8 @@
   "reps": "8-12 each side",
   "rest": 75,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013246/gym-support/exercises/images/step-up_xhcblw.webp"
  },
  {
   "name": "Leg Extension",
@@ -667,7 +732,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps)"
+  "description": "Cơ chính: Đùi trước (Quadriceps)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013160/gym-support/exercises/images/leg-extension_brzn2z.webp"
  },
  {
   "name": "Goblet Squat",
@@ -677,7 +743,8 @@
   "reps": "10-15",
   "rest": 75,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013135/gym-support/exercises/images/goblet-squat_u5ob5b.webp"
  },
  {
   "name": "Romanian Deadlift",
@@ -687,7 +754,8 @@
   "reps": "6-10",
   "rest": 120,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Dựng cột sống (Erector Spinae)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Dựng cột sống (Erector Spinae)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013215/gym-support/exercises/images/romanian-deadlift_ejkqsl.webp"
  },
  {
   "name": "Stiff-Leg Deadlift",
@@ -697,7 +765,8 @@
   "reps": "8-12",
   "rest": 120,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013249/gym-support/exercises/images/stiff-leg-deadlift_bskfqb.webp"
  },
  {
   "name": "Lying Leg Curl",
@@ -707,7 +776,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013165/gym-support/exercises/images/lying-leg-curl_rwwhu5.webp"
  },
  {
   "name": "Seated Leg Curl",
@@ -717,7 +787,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013228/gym-support/exercises/images/seated-leg-curl_hqzseu.webp"
  },
  {
   "name": "Nordic Hamstring Curl",
@@ -727,7 +798,8 @@
   "reps": "4-8",
   "rest": 120,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013175/gym-support/exercises/images/nordic-hamstring-curl_utbomn.webp"
  },
  {
   "name": "Good Morning",
@@ -737,7 +809,8 @@
   "reps": "8-12",
   "rest": 120,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Dựng cột sống (Erector Spinae), Cơ mông lớn(Gluteus Maximus)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Dựng cột sống (Erector Spinae), Cơ mông lớn(Gluteus Maximus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013138/gym-support/exercises/images/good-morning_vutzfd.webp"
  },
  {
   "name": "Swiss Ball Leg Curl",
@@ -747,7 +820,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013259/gym-support/exercises/images/swiss-ball-leg-curl_dqjegq.webp"
  },
  {
   "name": "Single-Leg Romanian Deadlift",
@@ -757,7 +831,8 @@
   "reps": "8-12 each side",
   "rest": 75,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013238/gym-support/exercises/images/single-leg-romanian-deadlift_tkokq4.webp"
  },
  {
   "name": "Barbell Hip Thrust",
@@ -767,7 +842,8 @@
   "reps": "8-12",
   "rest": 90,
   "muscleGroup": "Cơ mông (Glutes)",
-  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013051/gym-support/exercises/images/barbell-hip-thrust_fd30l0.webp"
  },
  {
   "name": "Glute Bridge",
@@ -777,7 +853,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Cơ mông (Glutes)",
-  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013133/gym-support/exercises/images/glute-bridge_y8o0e9.webp"
  },
  {
   "name": "Cable Glute Kickback",
@@ -787,7 +864,8 @@
   "reps": "12-15 each side",
   "rest": 60,
   "muscleGroup": "Cơ mông (Glutes)",
-  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013075/gym-support/exercises/images/cable-glute-kickback_acrlf8.webp"
  },
  {
   "name": "Hip Abduction Machine",
@@ -797,7 +875,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Cơ mông (Glutes)",
-  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)"
+  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013147/gym-support/exercises/images/hip-abduction-machine_hdplfh.webp"
  },
  {
   "name": "Banded Lateral Walk",
@@ -807,7 +886,8 @@
   "reps": "10-15 steps each side",
   "rest": 45,
   "muscleGroup": "Cơ mông (Glutes)",
-  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)"
+  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013038/gym-support/exercises/images/banded-lateral-walk_flwnyy.webp"
  },
  {
   "name": "Sumo Squat",
@@ -817,7 +897,8 @@
   "reps": "10-15",
   "rest": 75,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi trước (Quadriceps)"
+  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi trước (Quadriceps)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013257/gym-support/exercises/images/sumo-squat_tzv84d.webp"
  },
  {
   "name": "Sumo Deadlift",
@@ -827,7 +908,8 @@
   "reps": "4-8",
   "rest": 150,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013255/gym-support/exercises/images/sumo-deadlift_nmoexo.webp"
  },
  {
   "name": "Adductor Machine",
@@ -837,7 +919,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ khép đùi (Adductors)"
+  "description": "Cơ chính: Cơ khép đùi (Adductors)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013028/gym-support/exercises/images/adductor-machine_pbhi5e.webp"
  },
  {
   "name": "Standing Calf Raise",
@@ -847,7 +930,8 @@
   "reps": "10-20",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013243/gym-support/exercises/images/standing-calf-raise_fmno2v.webp"
  },
  {
   "name": "Seated Calf Raise",
@@ -857,7 +941,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013226/gym-support/exercises/images/seated-calf-raise_twwacw.webp"
  },
  {
   "name": "Donkey Calf Raise",
@@ -867,7 +952,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013104/gym-support/exercises/images/donkey-calf-raise_t2psxs.webp"
  },
  {
   "name": "Single-Leg Calf Raise",
@@ -877,7 +963,8 @@
   "reps": "12-20 each side",
   "rest": 45,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ bắp chân (Calves). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ bắp chân (Calves). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013235/gym-support/exercises/images/single-leg-calf-raise_njtrvu.webp"
  },
  {
   "name": "Calf Press on Leg Press",
@@ -887,7 +974,8 @@
   "reps": "12-20",
   "rest": 60,
   "muscleGroup": "Chân (Legs & Glutes)",
-  "description": "Cơ chính: Cơ bắp chân (Calves)"
+  "description": "Cơ chính: Cơ bắp chân (Calves)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013079/gym-support/exercises/images/calf-press-on-leg-press_bveqcm.webp"
  },
  {
   "name": "Crunch",
@@ -897,7 +985,8 @@
   "reps": "15-25",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013093/gym-support/exercises/images/crunch_kmftem.webp"
  },
  {
   "name": "Cable Crunch",
@@ -907,7 +996,8 @@
   "reps": "10-15",
   "rest": 60,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013068/gym-support/exercises/images/cable-crunch_lnzvod.webp"
  },
  {
   "name": "Reverse Crunch",
@@ -917,7 +1007,8 @@
   "reps": "12-20",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013206/gym-support/exercises/images/reverse-crunch_xxpvhr.webp"
  },
  {
   "name": "Hanging Leg Raise",
@@ -927,7 +1018,8 @@
   "reps": "8-15",
   "rest": 60,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013145/gym-support/exercises/images/hanging-leg-raise_gfb6zs.webp"
  },
  {
   "name": "Plank",
@@ -937,7 +1029,8 @@
   "reps": "30-60 seconds",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013190/gym-support/exercises/images/plank_afqv3m.webp"
  },
  {
   "name": "Side Plank",
@@ -947,7 +1040,8 @@
   "reps": "20-45 seconds each side",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ bụng ngang(Transversus Abdominis)"
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ bụng ngang(Transversus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013230/gym-support/exercises/images/side-plank_g5m8p3.webp"
  },
  {
   "name": "Russian Twist",
@@ -957,7 +1051,8 @@
   "reps": "16-24 total",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013221/gym-support/exercises/images/russian-twist_ug9394.webp"
  },
  {
   "name": "Bicycle Crunch",
@@ -967,7 +1062,8 @@
   "reps": "16-24 total",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013061/gym-support/exercises/images/bicycle-crunch_aw55bf.webp"
  },
  {
   "name": "Ab Wheel Rollout",
@@ -977,7 +1073,8 @@
   "reps": "6-12",
   "rest": 75,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis), Vai trước (Anterior Deltoid)"
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis), Vai trước (Anterior Deltoid)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013025/gym-support/exercises/images/ab-wheel-rollout_y9flhq.webp"
  },
  {
   "name": "Dead Bug",
@@ -987,7 +1084,8 @@
   "reps": "8-12 each side",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013095/gym-support/exercises/images/dead-bug_vhxz9k.webp"
  },
  {
   "name": "Mountain Climber",
@@ -997,6 +1095,7 @@
   "reps": "30-45 seconds",
   "rest": 45,
   "muscleGroup": "Cơ Bụng (Abs & Core)",
-  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Vai trước (Anterior Deltoid), Cơ thẳng bụng(Rectus Abdominis)"
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Vai trước (Anterior Deltoid), Cơ thẳng bụng(Rectus Abdominis)",
+  "imageUrl": "https://res.cloudinary.com/dznyeikuu/image/upload/v1782013173/gym-support/exercises/images/mountain-climber_mq0l21.webp"
  }
 ]

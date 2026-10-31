@@ -57,7 +57,7 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
-    private sealed record SeedRow(string Name, string? Equipment, string Level, int? Sets, string? Reps, int? Rest, string? MuscleGroup, string? Description);
+    private sealed record SeedRow(string Name, string? Equipment, string Level, int? Sets, string? Reps, int? Rest, string? MuscleGroup, string? Description, string? ImageUrl);
 
     public async Task<List<ExerciseDto>> ExercisesAsync(string? muscleGroup, string? search, CancellationToken ct) =>
         (await repo.ExercisesAsync(muscleGroup, search, ct)).Select(x => new ExerciseDto(x.Id, x.Name, x.MuscleGroup,
@@ -69,15 +69,20 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
     public async Task<int> SeedExercisesAsync(string seedFile, CancellationToken ct)
     {
         var rows = JsonSerializer.Deserialize<List<SeedRow>>(await File.ReadAllTextAsync(seedFile, ct), Json) ?? [];
-        var known = (await repo.TrackedExercisesAsync(ct)).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var known = (await repo.TrackedExercisesAsync(ct)).ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
         var added = 0;
-        foreach (var r in rows.Where(r => known.Add(r.Name)))
+        foreach (var r in rows)
         {
+            if (known.TryGetValue(r.Name, out var existing))
+            {
+                existing.ImageUrl ??= r.ImageUrl; // back-fill rows seeded before the images were known
+                continue;
+            }
             repo.AddExercise(new Exercise
             {
                 Name = r.Name, Equipment = r.Equipment, MuscleGroup = r.MuscleGroup, Description = r.Description,
                 Level = Enum.TryParse<Level>(r.Level, true, out var lv) ? lv : Level.Beginner,
-                DefaultSets = r.Sets, DefaultReps = r.Reps, RestSeconds = r.Rest,
+                DefaultSets = r.Sets, DefaultReps = r.Reps, RestSeconds = r.Rest, ImageUrl = r.ImageUrl,
             });
             added++;
         }
