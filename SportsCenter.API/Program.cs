@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.OpenApi.Models;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
+using SportsCenter.Services.Ai;
 using SportsCenter.Services.Auth;
 using SportsCenter.Services.Audit;
 using SportsCenter.Services.Email;
@@ -15,6 +16,7 @@ using SportsCenter.Services.Users;
 using SportsCenter.Services.Scheduling;
 using SportsCenter.Services.Membership;
 using SportsCenter.Services.Payments;
+using SportsCenter.Services.Training;
 using SportsCenter.Services.Media;
 using CloudinaryDotNet;
 
@@ -115,6 +117,13 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
 
+builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
+builder.Services.AddScoped<ITrainingService, TrainingService>();
+builder.Services.AddScoped<IAiRepository, AiRepository>();
+builder.Services.AddScoped<IAiUsageService, AiUsageService>();
+builder.Services.AddScoped<IWorkoutEvaluationService, WorkoutEvaluationService>();
+builder.Services.AddHttpClient<IAiService, AiService>(c => c.Timeout = TimeSpan.FromSeconds(120));
+
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.AddSingleton(sp =>
 {
@@ -157,6 +166,8 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<SportsCenter.Repository.Data.AppDbContext>();
     await db.Database.MigrateAsync();
     await DemoSeeder.SeedAsync(db);
+    await scope.ServiceProvider.GetRequiredService<ITrainingService>()
+        .SeedExercisesAsync(Path.Combine(AppContext.BaseDirectory, "SeedData", "exercises.json"), default);
 }
 
 // Behind nginx on EC2, Kestrel only ever sees plain HTTP from localhost; without this,
