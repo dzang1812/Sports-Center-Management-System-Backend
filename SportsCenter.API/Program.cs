@@ -16,6 +16,7 @@ using SportsCenter.Services.Users;
 using SportsCenter.Services.Scheduling;
 using SportsCenter.Services.Membership;
 using SportsCenter.Services.Payments;
+using SportsCenter.Services.Training;
 using SportsCenter.Services.Media;
 using CloudinaryDotNet;
 
@@ -116,6 +117,8 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
 
+builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
+builder.Services.AddScoped<ITrainingService, TrainingService>();
 builder.Services.AddScoped<IAiRepository, AiRepository>();
 builder.Services.AddScoped<IAiUsageService, AiUsageService>();
 builder.Services.AddScoped<IWorkoutEvaluationService, WorkoutEvaluationService>();
@@ -163,6 +166,8 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<SportsCenter.Repository.Data.AppDbContext>();
     await db.Database.MigrateAsync();
     await DemoSeeder.SeedAsync(db);
+    await scope.ServiceProvider.GetRequiredService<ITrainingService>()
+        .SeedExercisesAsync(Path.Combine(AppContext.BaseDirectory, "SeedData", "exercises.json"), default);
 }
 
 // Behind nginx on EC2, Kestrel only ever sees plain HTTP from localhost; without this,

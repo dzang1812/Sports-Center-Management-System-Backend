@@ -10,6 +10,12 @@ public class Exercise
     public string? MuscleGroup { get; set; }
     public Level Level { get; set; }
     public string? Description { get; set; }
+    public string? Equipment { get; set; }
+    public int? DefaultSets { get; set; }
+    public string? DefaultReps { get; set; } // free-form such as "8-12"
+    public int? RestSeconds { get; set; }
+    public string? ImageUrl { get; set; } // Cloudinary
+    public string? VideoUrl { get; set; }
 }
 
 // Exactly one of MemberId / ClassId is set (DB check constraint) = individual plan vs whole-class plan.

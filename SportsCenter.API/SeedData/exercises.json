@@ -1,0 +1,1002 @@
+[
+ {
+  "name": "Barbell Bench Press",
+  "equipment": "Barbell, Bench",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "6-10",
+  "rest": 120,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Dumbbell Bench Press",
+  "equipment": "Dumbbells, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Incline Barbell Press",
+  "equipment": "Barbell, Incline Bench",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "6-10",
+  "rest": 120,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Incline Dumbbell Press",
+  "equipment": "Dumbbells, Incline Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực trên (Clavicular head). Cơ phụ: Vai trước (Anterior Deltoid), Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Decline Bench Press",
+  "equipment": "Barbell, Decline Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực dưới(Abdominal head). Cơ phụ: Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Machine Chest Press",
+  "equipment": "Chest Press Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Dumbbell Fly",
+  "equipment": "Dumbbells, Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)"
+ },
+ {
+  "name": "Pec Deck Fly",
+  "equipment": "Pec Deck Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực nhỏ(Minor)"
+ },
+ {
+  "name": "Cable Crossover",
+  "equipment": "Cable Machine",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Ngực dưới(Abdominal head)"
+ },
+ {
+  "name": "Push-Up",
+  "equipment": "Bodyweight",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-20",
+  "rest": 60,
+  "muscleGroup": "Cơ Ngực (Chest)",
+  "description": "Cơ chính: Ngực giữa(Sternal head). Cơ phụ: Đầu ngoài tay sau (Lateral head), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Pull-Up",
+  "equipment": "Pull-Up Bar",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "5-10",
+  "rest": 120,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii), Lưng giữa (Rhomboids)"
+ },
+ {
+  "name": "Chin-Up",
+  "equipment": "Pull-Up Bar",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "5-10",
+  "rest": 120,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Wide-Grip Lat Pulldown",
+  "equipment": "Cable Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ:  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Neutral-Grip Lat Pulldown",
+  "equipment": "Cable Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "Barbell Bent-Over Row",
+  "equipment": "Barbell",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "6-10",
+  "rest": 120,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)"
+ },
+ {
+  "name": "Pendlay Row",
+  "equipment": "Barbell",
+  "level": "Advanced",
+  "sets": 4,
+  "reps": "5-8",
+  "rest": 120,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Dựng cột sống (Erector Spinae)"
+ },
+ {
+  "name": "T-Bar Row",
+  "equipment": "T-Bar Row Machine",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats),  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Seated Cable Row",
+  "equipment": "Cable Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats), Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "One-Arm Dumbbell Row",
+  "equipment": "Dumbbell, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 75,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Lưng giữa (Rhomboids),  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Chest-Supported Row",
+  "equipment": "Dumbbells, Incline Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng giữa (Rhomboids). Cơ phụ: Vai sau (Posterior Deltoid), Lưng xô (Latissimus Dorsi - Lats)"
+ },
+ {
+  "name": "Straight-Arm Pulldown",
+  "equipment": "Cable Machine",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Lưng xô (Latissimus Dorsi - Lats). Cơ phụ: Tròn lớn (Teres Major)"
+ },
+ {
+  "name": "Conventional Deadlift",
+  "equipment": "Barbell",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "3-6",
+  "rest": 180,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Đùi sau(Hamstrings), Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Rack Pull",
+  "equipment": "Barbell, Power Rack",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "5-8",
+  "rest": 150,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Back Extension",
+  "equipment": "Back Extension Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Dựng cột sống (Erector Spinae). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Dumbbell Shrug",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Lưng (Back)",
+  "description": "Cơ chính: Cầu vai (Trapezius - Traps). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis)"
+ },
+ {
+  "name": "Barbell Overhead Press",
+  "equipment": "Barbell",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "6-10",
+  "rest": 120,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Dumbbell Shoulder Press",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid), Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Arnold Press",
+  "equipment": "Dumbbells",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Vai giữa (Lateral Deltoid)"
+ },
+ {
+  "name": "Landmine Press",
+  "equipment": "Barbell, Landmine Attachment",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 75,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head), Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Dumbbell Lateral Raise",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)"
+ },
+ {
+  "name": "Cable Lateral Raise",
+  "equipment": "Cable Machine",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "12-15 each side",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid). Cơ phụ: Cầu vai (Trapezius - Traps)"
+ },
+ {
+  "name": "Machine Lateral Raise",
+  "equipment": "Lateral Raise Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai giữa (Lateral Deltoid)"
+ },
+ {
+  "name": "Dumbbell Front Raise",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai trước (Anterior Deltoid). Cơ phụ: Ngực trên (Clavicular head)"
+ },
+ {
+  "name": "Rear Delt Fly",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)"
+ },
+ {
+  "name": "Reverse Pec Deck",
+  "equipment": "Pec Deck Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Lưng giữa (Rhomboids)"
+ },
+ {
+  "name": "Face Pull",
+  "equipment": "Cable Machine, Rope",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15",
+  "rest": 60,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Vai sau (Posterior Deltoid). Cơ phụ: Cơ chóp xoay(Rotator Cuff), Cầu vai (Trapezius - Traps)"
+ },
+ {
+  "name": "Cable External Rotation",
+  "equipment": "Cable Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15 each side",
+  "rest": 45,
+  "muscleGroup": "Cơ vai (Deltoids)",
+  "description": "Cơ chính: Cơ chóp xoay(Rotator Cuff). Cơ phụ: Vai sau (Posterior Deltoid)"
+ },
+ {
+  "name": "Barbell Curl",
+  "equipment": "Barbell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+ },
+ {
+  "name": "EZ-Bar Curl",
+  "equipment": "EZ Bar",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "Alternating Dumbbell Curl",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12 each side",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+ },
+ {
+  "name": "Incline Dumbbell Curl",
+  "equipment": "Dumbbells, Incline Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-12",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "Hammer Curl",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính: Cơ cánh tay (Brachialis). Cơ phụ: Cơ sấp/duỗi (Extensors & Brachioradialis),  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Preacher Curl",
+  "equipment": "EZ Bar, Preacher Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "Cable Curl",
+  "equipment": "Cable Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii). Cơ phụ: Cơ ngửa/gập (Flexors)"
+ },
+ {
+  "name": "Concentration Curl",
+  "equipment": "Dumbbell, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12 each side",
+  "rest": 60,
+  "muscleGroup": "Tay trước (Biceps)",
+  "description": "Cơ chính:  Cơ nhị đầu(Biceps Brachii)"
+ },
+ {
+  "name": "Close-Grip Bench Press",
+  "equipment": "Barbell, Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "6-10",
+  "rest": 90,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực giữa(Sternal head), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Straight-Bar Pushdown",
+  "equipment": "Cable Machine, Straight Bar",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+ },
+ {
+  "name": "Rope Pushdown",
+  "equipment": "Cable Machine, Rope",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+ },
+ {
+  "name": "Overhead Dumbbell Extension",
+  "equipment": "Dumbbell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-12",
+  "rest": 60,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+ },
+ {
+  "name": "Overhead Cable Extension",
+  "equipment": "Cable Machine, Rope",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu giữa tay sau (Medial head)"
+ },
+ {
+  "name": "Skull Crusher",
+  "equipment": "EZ Bar, Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 75,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu dài tay sau (Long head). Cơ phụ: Đầu ngoài tay sau (Lateral head)"
+ },
+ {
+  "name": "Bench Dip",
+  "equipment": "Bench, Bodyweight",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-15",
+  "rest": 60,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Ngực dưới(Abdominal head), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Dumbbell Kickback",
+  "equipment": "Dumbbell, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15 each side",
+  "rest": 45,
+  "muscleGroup": "Tay sau (Triceps Brachii)",
+  "description": "Cơ chính: Đầu ngoài tay sau (Lateral head). Cơ phụ: Đầu dài tay sau (Long head)"
+ },
+ {
+  "name": "Barbell Wrist Curl",
+  "equipment": "Barbell, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 45,
+  "muscleGroup": "Cẳng tay (Forearms)",
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors)"
+ },
+ {
+  "name": "Reverse Wrist Curl",
+  "equipment": "Barbell, Bench",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 45,
+  "muscleGroup": "Cẳng tay (Forearms)",
+  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis)"
+ },
+ {
+  "name": "Reverse Barbell Curl",
+  "equipment": "Barbell",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cẳng tay (Forearms)",
+  "description": "Cơ chính: Cơ sấp/duỗi (Extensors & Brachioradialis). Cơ phụ: Cơ cánh tay (Brachialis)"
+ },
+ {
+  "name": "Farmer's Carry",
+  "equipment": "Dumbbells or Kettlebells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "30-45 seconds",
+  "rest": 75,
+  "muscleGroup": "Cẳng tay (Forearms)",
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Cầu vai (Trapezius - Traps), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Dead Hang",
+  "equipment": "Pull-Up Bar",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "20-45 seconds",
+  "rest": 60,
+  "muscleGroup": "Cẳng tay (Forearms)",
+  "description": "Cơ chính: Cơ ngửa/gập (Flexors). Cơ phụ: Lưng xô (Latissimus Dorsi - Lats)"
+ },
+ {
+  "name": "Barbell Back Squat",
+  "equipment": "Barbell, Power Rack",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "5-10",
+  "rest": 150,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Front Squat",
+  "equipment": "Barbell, Power Rack",
+  "level": "Advanced",
+  "sets": 4,
+  "reps": "5-8",
+  "rest": 150,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Hack Squat",
+  "equipment": "Hack Squat Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Leg Press",
+  "equipment": "Leg Press Machine",
+  "level": "Beginner",
+  "sets": 4,
+  "reps": "8-15",
+  "rest": 120,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Bulgarian Split Squat",
+  "equipment": "Dumbbells, Bench",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 90,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Walking Lunge",
+  "equipment": "Dumbbells",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-16 steps",
+  "rest": 90,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Reverse Lunge",
+  "equipment": "Dumbbells",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 75,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Step-Up",
+  "equipment": "Dumbbells, Plyo Box",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 75,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Leg Extension",
+  "equipment": "Leg Extension Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps)"
+ },
+ {
+  "name": "Goblet Squat",
+  "equipment": "Dumbbell or Kettlebell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 75,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi trước (Quadriceps). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Romanian Deadlift",
+  "equipment": "Barbell",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "6-10",
+  "rest": 120,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Dựng cột sống (Erector Spinae)"
+ },
+ {
+  "name": "Stiff-Leg Deadlift",
+  "equipment": "Barbell",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 120,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Lying Leg Curl",
+  "equipment": "Leg Curl Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Seated Leg Curl",
+  "equipment": "Seated Leg Curl Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Nordic Hamstring Curl",
+  "equipment": "Bodyweight, Anchor",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "4-8",
+  "rest": 120,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Good Morning",
+  "equipment": "Barbell",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": 120,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Dựng cột sống (Erector Spinae), Cơ mông lớn(Gluteus Maximus)"
+ },
+ {
+  "name": "Swiss Ball Leg Curl",
+  "equipment": "Stability Ball",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Single-Leg Romanian Deadlift",
+  "equipment": "Dumbbell",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 75,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Đùi sau(Hamstrings). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Barbell Hip Thrust",
+  "equipment": "Barbell, Bench",
+  "level": "Intermediate",
+  "sets": 4,
+  "reps": "8-12",
+  "rest": 90,
+  "muscleGroup": "Cơ mông (Glutes)",
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Glute Bridge",
+  "equipment": "Bodyweight or Barbell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Cơ mông (Glutes)",
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Cable Glute Kickback",
+  "equipment": "Cable Machine, Ankle Strap",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-15 each side",
+  "rest": 60,
+  "muscleGroup": "Cơ mông (Glutes)",
+  "description": "Cơ chính: Cơ mông lớn(Gluteus Maximus). Cơ phụ: Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Hip Abduction Machine",
+  "equipment": "Hip Abduction Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Cơ mông (Glutes)",
+  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)"
+ },
+ {
+  "name": "Banded Lateral Walk",
+  "equipment": "Resistance Band",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15 steps each side",
+  "rest": 45,
+  "muscleGroup": "Cơ mông (Glutes)",
+  "description": "Cơ chính: Cơ mông nhỡ(Gluteus Medius). Cơ phụ: Cơ mông nhỏ(Gluteus Minimus)"
+ },
+ {
+  "name": "Sumo Squat",
+  "equipment": "Dumbbell or Barbell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 75,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi trước (Quadriceps)"
+ },
+ {
+  "name": "Sumo Deadlift",
+  "equipment": "Barbell",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "4-8",
+  "rest": 150,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ khép đùi (Adductors). Cơ phụ: Cơ mông lớn(Gluteus Maximus), Đùi sau(Hamstrings)"
+ },
+ {
+  "name": "Adductor Machine",
+  "equipment": "Adductor Machine",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ khép đùi (Adductors)"
+ },
+ {
+  "name": "Standing Calf Raise",
+  "equipment": "Calf Raise Machine",
+  "level": "Beginner",
+  "sets": 4,
+  "reps": "10-20",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Seated Calf Raise",
+  "equipment": "Seated Calf Raise Machine",
+  "level": "Beginner",
+  "sets": 4,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Donkey Calf Raise",
+  "equipment": "Donkey Calf Machine",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Single-Leg Calf Raise",
+  "equipment": "Bodyweight or Dumbbell",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20 each side",
+  "rest": 45,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ bắp chân (Calves). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Calf Press on Leg Press",
+  "equipment": "Leg Press Machine",
+  "level": "Beginner",
+  "sets": 4,
+  "reps": "12-20",
+  "rest": 60,
+  "muscleGroup": "Chân (Legs & Glutes)",
+  "description": "Cơ chính: Cơ bắp chân (Calves)"
+ },
+ {
+  "name": "Crunch",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "15-25",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis)"
+ },
+ {
+  "name": "Cable Crunch",
+  "equipment": "Cable Machine, Rope",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "10-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Reverse Crunch",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "12-20",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Hanging Leg Raise",
+  "equipment": "Pull-Up Bar",
+  "level": "Intermediate",
+  "sets": 3,
+  "reps": "8-15",
+  "rest": 60,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ thẳng bụng(Rectus Abdominis). Cơ phụ: Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Plank",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "30-60 seconds",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+ },
+ {
+  "name": "Side Plank",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "20-45 seconds each side",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ bụng ngang(Transversus Abdominis)"
+ },
+ {
+  "name": "Russian Twist",
+  "equipment": "Bodyweight or Medicine Ball",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "16-24 total",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ liên sườn trong(Internal Obliques), Cơ thẳng bụng(Rectus Abdominis)"
+ },
+ {
+  "name": "Bicycle Crunch",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "16-24 total",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ liên sườn ngoài(External Obliques). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+ },
+ {
+  "name": "Ab Wheel Rollout",
+  "equipment": "Ab Wheel",
+  "level": "Advanced",
+  "sets": 3,
+  "reps": "6-12",
+  "rest": 75,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis), Vai trước (Anterior Deltoid)"
+ },
+ {
+  "name": "Dead Bug",
+  "equipment": "Bodyweight, Mat",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "8-12 each side",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Cơ thẳng bụng(Rectus Abdominis)"
+ },
+ {
+  "name": "Mountain Climber",
+  "equipment": "Bodyweight",
+  "level": "Beginner",
+  "sets": 3,
+  "reps": "30-45 seconds",
+  "rest": 45,
+  "muscleGroup": "Cơ Bụng (Abs & Core)",
+  "description": "Cơ chính: Cơ bụng ngang(Transversus Abdominis). Cơ phụ: Vai trước (Anterior Deltoid), Cơ thẳng bụng(Rectus Abdominis)"
+ }
+]

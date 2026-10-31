@@ -948,7 +948,19 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("DefaultReps")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("DefaultSets")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Equipment")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl")
                         .HasColumnType("text");
 
                     b.Property<string>("Level")
@@ -962,8 +974,14 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("RestSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("SportId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("VideoUrl")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
