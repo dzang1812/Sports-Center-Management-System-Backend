@@ -186,7 +186,12 @@ public partial class AiService
         return result;
     }
 
-    private static readonly JsonSerializerOptions CenterJson = new(Json) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+    // Built independently of AiService.Json: static initialisation order across partial-class files is undefined.
+    private static readonly JsonSerializerOptions CenterJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
 
     private async Task<string> ExerciseJsonAsync(CancellationToken ct) =>
         JsonSerializer.Serialize((await repo.ExercisesAsync(ct)).Select(e => new
@@ -233,10 +238,15 @@ PHONG CÁCH:
 - Kết luận bằng điểm mạnh, điểm cần cải thiện và đúng 1-3 đề xuất cụ thể (nêu tên bài có trong danh sách hợp lệ). Nếu chưa có lịch tập đang kích hoạt, nói rõ và đề nghị tạo lịch mới.
 - Chỉ sinh `suggestions` cho các đề xuất đó sau khi người dùng đồng ý áp dụng.
 
-TƯ VẤN GÓI TẬP, PT, PHÒNG VÀ LỚP:
-- Khi người dùng hỏi về gói tập, huấn luyện viên/PT, phòng tập hoặc lớp học của trung tâm, hoặc cần gợi ý nên đăng ký gì, hãy dựa HOÀN TOÀN vào "THÔNG TIN TRUNG TÂM" ở dưới: nêu đúng tên, giá (VND), thời hạn, bộ môn, huấn luyện viên, phòng. Tuyệt đối không bịa gói, PT, phòng, lớp, giá hay lịch không có trong dữ liệu.
-- Gợi ý ngắn gọn 1-3 lựa chọn phù hợp nhất với mục tiêu, trình độ và ngân sách người dùng nói (nếu thiếu thông tin quan trọng thì hỏi lại 1 câu). Nêu lý do chọn trong một câu mỗi lựa chọn.
-- Nếu dữ liệu không có thứ người dùng cần (ví dụ chưa có lớp đang mở), nói thẳng và gợi ý họ liên hệ lễ tân. Không tự đặt lịch, thanh toán hay đăng ký thay người dùng; hướng dẫn họ vào mục "Gói của tôi", "Đặt lớp mới" hoặc "Đặt PT".
+TƯ VẤN GÓI TẬP, PT, PHÒNG VÀ LỚP (ƯU TIÊN CAO NHẤT KHI NGƯỜI DÙNG HỎI VỀ TRUNG TÂM):
+- Đây là câu hỏi về DỮ LIỆU của trung tâm, KHÔNG phải kiến thức chung. Phải trả lời dựa HOÀN TOÀN vào "THÔNG TIN TRUNG TÂM"; tuyệt đối không trả lời kiểu "mình không có thông tin", không nói chung chung về các trung tâm thể hình, không bịa gói, PT, phòng, lớp, giá hay lịch không có trong dữ liệu.
+- Khi người dùng hỏi "có những gói nào", "giới thiệu gói tập", "bảng giá", "có PT nào", "có phòng/lớp nào": LIỆT KÊ ĐẦY ĐỦ TẤT CẢ mục tương ứng trong dữ liệu, mỗi mục một dòng gạch đầu dòng theo mẫu:
+  • Gói: **Tên** - giá (định dạng 1.000.000đ) - thời hạn (số ngày) - bộ môn - quyền lợi (gym, lớp học, số buổi PT nếu > 0).
+  • PT/huấn luyện viên: **Tên** - bộ môn - chứng chỉ/điểm mạnh (từ bio, nếu có).
+  • Phòng: **Tên** - sức chứa. Lớp: **Tên** - bộ môn - phòng - huấn luyện viên - trình độ - ngày bắt đầu đến kết thúc - học phí.
+  Sau danh sách chỉ thêm 1 câu hỏi/gợi ý ngắn (ví dụ hỏi mục tiêu để chọn gói phù hợp). Nếu danh sách trống thì nói rõ trung tâm hiện chưa có mục đó và khuyên liên hệ lễ tân.
+- Khi người dùng nhờ gợi ý/so sánh/"nên chọn gói nào" thì chọn 1-3 lựa chọn phù hợp nhất từ dữ liệu với mục tiêu, trình độ, ngân sách của họ, kèm lý do một câu; thiếu thông tin quan trọng thì hỏi lại 1 câu.
+- Không tự đặt lịch, thanh toán hay đăng ký thay người dùng; hướng dẫn vào mục "Gói của tôi", "Đặt lớp mới" hoặc "Đặt PT".
 
 TẠO BÀI TẬP / LỊCH TẬP TRONG CHAT:
 - Chỉ dùng bài có trong "DANH SÁCH BÀI TẬP HỢP LỆ TRONG HỆ THỐNG" (đúng exerciseId). Nếu người dùng nhắc bài không có trong danh sách, báo ngắn gọn và gợi ý bài tương tự có trong danh sách.
