@@ -116,6 +116,13 @@ builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
+builder.Services.AddScoped<IFrontDeskRepository, FrontDeskRepository>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.SupportService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.PaymentHistoryService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.ReportTrendService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.CoachMessageService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.SubscriptionExpiryNotifier>();
+builder.Services.AddHostedService<SubscriptionExpiryWorker>();
 
 builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
 builder.Services.AddScoped<ITrainingService, TrainingService>();

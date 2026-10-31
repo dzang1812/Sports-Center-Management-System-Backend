@@ -353,7 +353,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             paymentStatus, subscription.PurchaseOrderId);
     }
 
-    private static PaymentDto ToPaymentDto(Payment payment, User member, string? planName) =>
+    internal static PaymentDto ToPaymentDto(Payment payment, User member, string? planName) =>
         new(payment.Id, payment.MemberId, member.FullName, payment.SubscriptionId, planName, payment.Amount,
             payment.Method, payment.Status, payment.InvoiceNumber, payment.PaidAt, payment.CheckoutUrl,
             payment.QrCode, payment.ReceivedBy?.FullName, payment.Purpose);
