@@ -5,6 +5,11 @@ using SportsCenter.Repository.Entities;
 namespace SportsCenter.Repository.Repositories;
 
 public record AiExerciseRow(int Id, string Name, string? MuscleGroup, Level Level);
+public record AiPlanRow(int Id, string Name, string? Description, decimal Price, int DurationDays, string? Sport, bool IncludesClasses, bool IncludesGymAccess, int PtSessionCredits, bool IsPtPackage);
+public record AiCoachRow(int Id, string Name, string? Bio, string? Certifications, List<string> Sports);
+public record AiRoomRow(int Id, string Name, int Capacity);
+public record AiClassRow(int Id, string Name, string Sport, string Room, string? Coach, Level Level, DateOnly StartDate, DateOnly EndDate, decimal Fee, int Capacity);
+public record AiCenterInfo(List<AiPlanRow> Plans, List<AiCoachRow> Coaches, List<AiRoomRow> Rooms, List<AiClassRow> Classes);
 
 public interface IAiRepository
 {
@@ -25,6 +30,7 @@ public interface IAiRepository
 
     // Member context + plans
     Task<User?> GetMemberAsync(int userId, CancellationToken ct);
+    Task<AiCenterInfo> CenterInfoAsync(DateOnly today, CancellationToken ct);
     Task<List<AiExerciseRow>> ExercisesAsync(CancellationToken ct);
     Task<Exercise?> GetExerciseAsync(int id, CancellationToken ct);
     Task<TrainingPlan?> GetActivePlanAsync(int memberId, CancellationToken ct);
@@ -113,6 +119,24 @@ public class AiRepository(AppDbContext db) : IAiRepository
     {
         db.AiFeatureUsageLogs.Add(log);
         await db.SaveChangesAsync(ct);
+    }
+
+    // Read-only snapshot of what the center sells, so the AI can recommend real plans, PTs, rooms and classes.
+    public async Task<AiCenterInfo> CenterInfoAsync(DateOnly today, CancellationToken ct)
+    {
+        var plans = await db.MembershipPlans.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Price)
+            .Select(p => new AiPlanRow(p.Id, p.Name, p.Description, p.Price, p.DurationDays, p.Sport != null ? p.Sport.Name : null,
+                p.IncludesClasses, p.IncludesGymAccess, p.PtSessionCredits, p.WalletPtPackage)).ToListAsync(ct);
+        var coaches = await db.Users.AsNoTracking().Where(u => u.Role == UserRole.Coach && u.IsActive && u.CoachProfile != null)
+            .Select(u => new { u.Id, u.FullName, u.CoachProfile!.Bio, u.CoachProfile.Certifications, Sports = u.CoachProfile.Sports.Select(s => s.Name).ToList() })
+            .ToListAsync(ct);
+        var rooms = await db.Rooms.AsNoTracking().Where(r => r.Status == RoomStatus.Active)
+            .Select(r => new AiRoomRow(r.Id, r.Name, r.Capacity)).ToListAsync(ct);
+        var classes = await db.Classes.AsNoTracking().Where(c => c.Status == ClassStatus.Open && c.EndDate >= today)
+            .OrderBy(c => c.StartDate).Take(30)
+            .Select(c => new AiClassRow(c.Id, c.Name, c.Sport.Name, c.Room.Name, c.Coach != null ? c.Coach.FullName : null,
+                c.Level, c.StartDate, c.EndDate, c.CourseFee, c.Capacity)).ToListAsync(ct);
+        return new AiCenterInfo(plans, coaches.Select(c => new AiCoachRow(c.Id, c.FullName, c.Bio, c.Certifications, c.Sports)).ToList(), rooms, classes);
     }
 
     public Task<User?> GetMemberAsync(int userId, CancellationToken ct) =>
