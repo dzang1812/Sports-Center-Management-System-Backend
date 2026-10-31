@@ -6,12 +6,25 @@ using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.Services.Operations;
 
-public record SupportRequestDto(int Id, int MemberId, string MemberName, string MemberEmail, string Subject, string Description,
-    SupportStatus Status, string? HandledByName, DateTime CreatedAt, DateTime? ResolvedAt);
+public record SupportRequestDto(int Id, int MemberId, string MemberName, string MemberEmail, SupportCategory Category, string Subject,
+    string Description, SupportStatus Status, string? HandledByName, string? CreatedByName, DateTime CreatedAt, DateTime LastActivityAt,
+    DateTime? ResolvedAt);
+
+public record SupportMessageDto(int Id, int AuthorId, string AuthorName, UserRole AuthorRole, string Body, bool IsInternal, DateTime CreatedAt);
+
+public record SupportDetailDto(SupportRequestDto Request, List<SupportMessageDto> Messages);
+
+public record SupportSummaryDto(int Open, int InProgress, int WaitingForMember);
 
 public record CreateSupportRequest(
+    SupportCategory Category,
     [param: Required(ErrorMessage = "Tiêu đề là bắt buộc"), StringLength(150, MinimumLength = 2, ErrorMessage = "Tiêu đề 2–150 ký tự")] string Subject,
-    [param: Required(ErrorMessage = "Nội dung là bắt buộc"), StringLength(2000, MinimumLength = 2, ErrorMessage = "Nội dung 2–2000 ký tự")] string Description);
+    [param: Required(ErrorMessage = "Nội dung là bắt buộc"), StringLength(2000, MinimumLength = 2, ErrorMessage = "Nội dung 2–2000 ký tự")] string Description,
+    int? MemberId = null);
+
+public record ReplySupportRequest(
+    [param: Required(ErrorMessage = "Nội dung là bắt buộc"), StringLength(2000, MinimumLength = 1, ErrorMessage = "Nội dung tối đa 2000 ký tự")] string Body,
+    bool IsInternal = false);
 
 public record UpdateSupportStatusRequest(SupportStatus Status);
 
@@ -45,11 +58,24 @@ internal static class Staff
 public sealed class SupportService(IFrontDeskRepository repo, IUserRepository users, INotificationRepository notifications,
     IAuditLogRepository audit, IAppClock clock)
 {
-    public async Task<SupportRequestDto> CreateAsync(int memberId, CreateSupportRequest r, CancellationToken ct)
+    // Member submits their own; front-desk staff log one on behalf of a member (MemberId required) and take it on.
+    public async Task<SupportRequestDto> CreateAsync(int actorId, CreateSupportRequest r, CancellationToken ct)
     {
-        await MembershipRules.EnsureActiveRoleAsync(users, memberId, UserRole.Member);
-        var request = new SupportRequest { MemberId = memberId, Subject = r.Subject.Trim(), Description = r.Description.Trim(), CreatedAt = clock.UtcNow };
+        var actor = await Staff.EnsureAsync(users, actorId, UserRole.Member, UserRole.Receptionist, UserRole.Manager);
+        var staff = actor.Role != UserRole.Member;
+        var memberId = staff ? r.MemberId ?? throw new SchedulingException("MEMBER_REQUIRED", "Cần chọn hội viên.") : actorId;
+        if (staff && (await users.GetByIdAsync(memberId))?.Role != UserRole.Member)
+            throw SchedulingException.NotFound("MEMBER_NOT_FOUND", "Không tìm thấy hội viên.");
+
+        var now = clock.UtcNow;
+        var request = new SupportRequest
+        {
+            MemberId = memberId, Category = r.Category, Subject = r.Subject.Trim(), Description = r.Description.Trim(),
+            Status = staff ? SupportStatus.InProgress : SupportStatus.Open, CreatedById = staff ? actorId : null,
+            HandledById = staff ? actorId : null, CreatedAt = now, LastActivityAt = now,
+        };
         repo.AddSupportRequest(request);
+        if (staff) Notify(request, actorId, $"Trung tâm đã ghi nhận yêu cầu của bạn: {request.Subject}.");
         await repo.SaveChangesAsync(ct);
         return ToDto((await repo.GetSupportRequestAsync(request.Id, ct))!);
     }
@@ -58,52 +84,115 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
     {
         await MembershipRules.EnsureActiveRoleAsync(users, memberId, UserRole.Member);
         (page, pageSize) = Staff.Paging(page, pageSize);
-        var (items, total) = await repo.ListSupportRequestsAsync(memberId, null, null, page, pageSize, ct);
+        var (items, total) = await repo.ListSupportRequestsAsync(memberId, null, null, null, page, pageSize, ct);
         return new(items.Select(ToDto).ToList(), total, page, pageSize);
     }
 
-    public async Task<PagedResponse<SupportRequestDto>> ListAsync(int actorId, SupportStatus? status, string? q, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<SupportRequestDto>> ListAsync(int actorId, SupportStatus? status, SupportCategory? category, string? q,
+        int page, int pageSize, CancellationToken ct)
     {
         await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
         (page, pageSize) = Staff.Paging(page, pageSize);
-        var (items, total) = await repo.ListSupportRequestsAsync(null, status, q, page, pageSize, ct);
+        var (items, total) = await repo.ListSupportRequestsAsync(null, status, category, q, page, pageSize, ct);
         return new(items.Select(ToDto).ToList(), total, page, pageSize);
+    }
+
+    public async Task<SupportSummaryDto> SummaryAsync(int actorId, CancellationToken ct)
+    {
+        await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
+        var counts = await repo.CountSupportByStatusAsync(ct);
+        return new(counts.GetValueOrDefault(SupportStatus.Open), counts.GetValueOrDefault(SupportStatus.InProgress),
+            counts.GetValueOrDefault(SupportStatus.WaitingForMember));
+    }
+
+    public async Task<SupportDetailDto> GetAsync(int actorId, int id, CancellationToken ct)
+    {
+        var (actor, request) = await LoadAsync(actorId, id, ct);
+        var staff = actor.Role != UserRole.Member;
+        var messages = await repo.ListSupportMessagesAsync(id, staff, ct);
+        return new(ToDto(request), messages.Select(m => new SupportMessageDto(m.Id, m.AuthorId, m.Author.FullName, m.Author.Role, m.Body,
+            m.IsInternal, m.CreatedAt)).ToList());
+    }
+
+    public async Task<SupportDetailDto> ReplyAsync(int actorId, int id, ReplySupportRequest r, CancellationToken ct)
+    {
+        var (actor, request) = await LoadAsync(actorId, id, ct);
+        if (request.Status == SupportStatus.Closed)
+            throw SchedulingException.Conflict("SUPPORT_CLOSED", "Yêu cầu đã đóng. Hãy mở lại trước khi trả lời.");
+        var staff = actor.Role != UserRole.Member;
+        if (!staff && r.IsInternal) throw SchedulingException.Forbidden("SUPPORT_INTERNAL_STAFF_ONLY", "Chỉ nhân viên được ghi chú nội bộ.");
+
+        var now = clock.UtcNow;
+        repo.AddSupportMessage(new SupportMessage { RequestId = id, AuthorId = actorId, Body = r.Body.Trim(), IsInternal = r.IsInternal, CreatedAt = now });
+        request.LastActivityAt = now;
+        if (staff && !r.IsInternal)
+        {
+            request.HandledById ??= actorId;
+            request.Status = SupportStatus.WaitingForMember;
+            request.ResolvedAt = null;
+            Notify(request, actorId, $"Trung tâm đã trả lời yêu cầu \"{request.Subject}\". Mở mục Hỗ trợ để xem.");
+        }
+        else if (!staff && request.Status is SupportStatus.WaitingForMember or SupportStatus.Resolved)
+        {
+            request.Status = request.HandledById is null ? SupportStatus.Open : SupportStatus.InProgress;
+            request.ResolvedAt = null;
+        }
+        await repo.SaveChangesAsync(ct);
+        return await GetAsync(actorId, id, ct);
     }
 
     public async Task<SupportRequestDto> UpdateStatusAsync(int actorId, int id, SupportStatus status, CancellationToken ct)
     {
-        await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
-        var request = await repo.GetSupportRequestAsync(id, ct)
-            ?? throw SchedulingException.NotFound("SUPPORT_NOT_FOUND", "Không tìm thấy yêu cầu hỗ trợ.");
+        var (actor, request) = await LoadAsync(actorId, id, ct);
         if (request.Status == status) return ToDto(request);
+        var staff = actor.Role != UserRole.Member;
+        // Members can only close their request or reopen a finished one.
+        if (!staff && !(status == SupportStatus.Closed ||
+            (status == SupportStatus.Open && request.Status is SupportStatus.Resolved or SupportStatus.Closed)))
+            throw SchedulingException.Forbidden("SUPPORT_STATUS_NOT_ALLOWED", "Bạn chỉ có thể đóng hoặc mở lại yêu cầu.");
 
         var previous = request.Status;
-        request.Status = status;
-        request.HandledById = actorId;
-        request.ResolvedAt = status == SupportStatus.Resolved ? clock.UtcNow : null;
-        notifications.Add(new Notification
+        var now = clock.UtcNow;
+        request.Status = !staff && status == SupportStatus.Open && request.HandledById is not null ? SupportStatus.InProgress : status;
+        request.LastActivityAt = now;
+        request.ResolvedAt = request.Status is SupportStatus.Resolved or SupportStatus.Closed ? request.ResolvedAt ?? now : null;
+        if (staff)
         {
-            UserId = request.MemberId,
-            SenderId = actorId,
-            Type = NotificationType.General,
-            Title = $"Yêu cầu hỗ trợ: {request.Subject}",
-            Body = $"Trạng thái: {StatusLabel(status)}.",
-            CreatedAt = clock.UtcNow,
-        });
-        audit.AddAudit(actorId, "Support.UpdateStatus", nameof(SupportRequest), id, new { From = previous.ToString(), To = status.ToString() });
+            request.HandledById ??= actorId;
+            Notify(request, actorId, $"Yêu cầu \"{request.Subject}\": {StatusLabel(request.Status)}.");
+        }
+        audit.AddAudit(actorId, "Support.UpdateStatus", nameof(SupportRequest), id, new { From = previous.ToString(), To = request.Status.ToString() });
         await repo.SaveChangesAsync(ct);
         return ToDto((await repo.GetSupportRequestAsync(id, ct))!);
     }
 
+    private async Task<(User Actor, SupportRequest Request)> LoadAsync(int actorId, int id, CancellationToken ct)
+    {
+        var actor = await Staff.EnsureAsync(users, actorId, UserRole.Member, UserRole.Receptionist, UserRole.Manager);
+        var request = await repo.GetSupportRequestAsync(id, ct);
+        // Same 404 for "missing" and "someone else's" so members can't probe ids.
+        if (request is null || (actor.Role == UserRole.Member && request.MemberId != actorId))
+            throw SchedulingException.NotFound("SUPPORT_NOT_FOUND", "Không tìm thấy yêu cầu hỗ trợ.");
+        return (actor, request);
+    }
+
+    private void Notify(SupportRequest request, int senderId, string body) => notifications.Add(new Notification
+    {
+        UserId = request.MemberId, SenderId = senderId, Type = NotificationType.General,
+        Title = "Cập nhật yêu cầu hỗ trợ", Body = body, CreatedAt = clock.UtcNow,
+    });
+
     private static string StatusLabel(SupportStatus s) => s switch
     {
-        SupportStatus.Open => "Đang chờ xử lý",
-        SupportStatus.InProgress => "Đang xử lý",
-        _ => "Đã giải quyết",
+        SupportStatus.Open => "chờ xử lý",
+        SupportStatus.InProgress => "đang xử lý",
+        SupportStatus.WaitingForMember => "chờ bạn phản hồi",
+        SupportStatus.Resolved => "đã giải quyết",
+        _ => "đã đóng",
     };
 
-    private static SupportRequestDto ToDto(SupportRequest x) => new(x.Id, x.MemberId, x.Member.FullName, x.Member.Email, x.Subject,
-        x.Description, x.Status, x.HandledBy?.FullName, x.CreatedAt, x.ResolvedAt);
+    private static SupportRequestDto ToDto(SupportRequest x) => new(x.Id, x.MemberId, x.Member.FullName, x.Member.Email, x.Category, x.Subject,
+        x.Description, x.Status, x.HandledBy?.FullName, x.CreatedBy?.FullName, x.CreatedAt, x.LastActivityAt, x.ResolvedAt);
 }
 
 public sealed class PaymentHistoryService(IFrontDeskRepository repo, IUserRepository users)

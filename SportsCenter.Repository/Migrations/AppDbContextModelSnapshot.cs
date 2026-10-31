@@ -1514,6 +1514,40 @@ namespace SportsCenter.Repository.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SportsCenter.Repository.Entities.SupportMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsInternal")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("SupportMessages");
+                });
+
             modelBuilder.Entity("SportsCenter.Repository.Entities.SupportRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -1522,8 +1556,15 @@ namespace SportsCenter.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -1531,6 +1572,9 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<int?>("HandledById")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("MemberId")
                         .HasColumnType("integer");
@@ -1544,13 +1588,18 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<string>("Subject")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
 
                     b.HasIndex("HandledById");
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("Status", "LastActivityAt");
 
                     b.ToTable("SupportRequests");
                 });
@@ -2468,8 +2517,32 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("Subscription");
                 });
 
+            modelBuilder.Entity("SportsCenter.Repository.Entities.SupportMessage", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.SupportRequest", "Request")
+                        .WithMany("Messages")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("SportsCenter.Repository.Entities.SupportRequest", b =>
                 {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "HandledBy")
                         .WithMany()
                         .HasForeignKey("HandledById")
@@ -2480,6 +2553,8 @@ namespace SportsCenter.Repository.Migrations
                         .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("CreatedBy");
 
                     b.Navigation("HandledBy");
 
@@ -2618,6 +2693,11 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("Enrollments");
 
                     b.Navigation("Sessions");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.SupportRequest", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.TrainingPlan", b =>

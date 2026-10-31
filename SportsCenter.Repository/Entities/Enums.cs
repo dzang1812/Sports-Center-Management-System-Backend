@@ -18,6 +18,7 @@ public enum PaymentStatus { Pending, Paid, Failed, Refunded }
 public enum AttendanceStatus { Present, Absent, Late, Excused }
 public enum AttendanceSource { LegacyCoachMarked, MemberSelfCheckIn }
 public enum NotificationType { General, ScheduleChange, Booking, Homework, SubscriptionExpiry }
-public enum SupportStatus { Open, InProgress, Resolved }
+public enum SupportStatus { Open, InProgress, Resolved, WaitingForMember, Closed }
+public enum SupportCategory { Payment, Membership, Schedule, Facility, Account, Other }
 public enum AiSuggestionStatus { Suggested, Accepted, Rejected }
 public enum ChatRole { User, Assistant }

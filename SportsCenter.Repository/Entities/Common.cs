@@ -26,8 +26,26 @@ public class SupportRequest
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";
     public SupportStatus Status { get; set; } = SupportStatus.Open;
+    public SupportCategory Category { get; set; } = SupportCategory.Other;
+    public int? CreatedById { get; set; } // staff who logged it at the desk; null = the member submitted it
+    public User? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
+    public List<SupportMessage> Messages { get; set; } = [];
+}
+
+// Conversation on a request. IsInternal = staff-only note, never shown to the member.
+public class SupportMessage
+{
+    public int Id { get; set; }
+    public int RequestId { get; set; }
+    public SupportRequest Request { get; set; } = null!;
+    public int AuthorId { get; set; }
+    public User Author { get; set; } = null!;
+    public string Body { get; set; } = "";
+    public bool IsInternal { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class AuditLog // important actions only (manager view)

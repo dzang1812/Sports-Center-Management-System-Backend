@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProgressEvaluation> ProgressEvaluations => Set<ProgressEvaluation>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AiSuggestion> AiSuggestions => Set<AiSuggestion>();
     public DbSet<AiChatMessage> AiChatMessages => Set<AiChatMessage>();
@@ -112,6 +113,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<CoachSessionAttendance>().HasIndex(a => new { a.SessionId, a.CoachId }).IsUnique();
         b.Entity<ClassSession>().Property(x => x.CheckInCodeHash).HasMaxLength(64);
         b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
+        b.Entity<SupportRequest>().Property(x => x.Subject).HasMaxLength(150);
+        b.Entity<SupportRequest>().HasIndex(x => new { x.Status, x.LastActivityAt });
+        b.Entity<SupportMessage>().Property(x => x.Body).HasMaxLength(2000);
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
         b.Entity<CheckIn>().HasIndex(x => x.MemberId).IsUnique()

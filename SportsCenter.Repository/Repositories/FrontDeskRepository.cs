@@ -12,8 +12,12 @@ public record ExpiringSubscriptionRow(int SubscriptionId, int MemberId, string P
 public interface IFrontDeskRepository
 {
     void AddSupportRequest(SupportRequest request);
+    void AddSupportMessage(SupportMessage message);
     Task<SupportRequest?> GetSupportRequestAsync(int id, CancellationToken ct);
-    Task<(List<SupportRequest> Items, int Total)> ListSupportRequestsAsync(int? memberId, SupportStatus? status, string? q, int page, int pageSize, CancellationToken ct);
+    Task<List<SupportMessage>> ListSupportMessagesAsync(int requestId, bool includeInternal, CancellationToken ct);
+    Task<(List<SupportRequest> Items, int Total)> ListSupportRequestsAsync(int? memberId, SupportStatus? status, SupportCategory? category,
+        string? q, int page, int pageSize, CancellationToken ct);
+    Task<Dictionary<SupportStatus, int>> CountSupportByStatusAsync(CancellationToken ct);
 
     Task<(List<Payment> Items, int Total)> ListPaymentsAsync(int memberId, int page, int pageSize, CancellationToken ct);
 
@@ -37,15 +41,27 @@ public class FrontDeskRepository(AppDbContext db) : IFrontDeskRepository
 {
     public void AddSupportRequest(SupportRequest request) => db.SupportRequests.Add(request);
 
-    public Task<SupportRequest?> GetSupportRequestAsync(int id, CancellationToken ct) =>
-        db.SupportRequests.Include(x => x.Member).Include(x => x.HandledBy).FirstOrDefaultAsync(x => x.Id == id, ct);
+    public void AddSupportMessage(SupportMessage message) => db.SupportMessages.Add(message);
 
-    public async Task<(List<SupportRequest> Items, int Total)> ListSupportRequestsAsync(int? memberId, SupportStatus? status, string? q,
-        int page, int pageSize, CancellationToken ct)
+    public Task<SupportRequest?> GetSupportRequestAsync(int id, CancellationToken ct) =>
+        db.SupportRequests.Include(x => x.Member).Include(x => x.HandledBy).Include(x => x.CreatedBy).FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public Task<List<SupportMessage>> ListSupportMessagesAsync(int requestId, bool includeInternal, CancellationToken ct) =>
+        db.SupportMessages.AsNoTracking().Include(x => x.Author)
+            .Where(x => x.RequestId == requestId && (includeInternal || !x.IsInternal))
+            .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync(ct);
+
+    public async Task<Dictionary<SupportStatus, int>> CountSupportByStatusAsync(CancellationToken ct) =>
+        (await db.SupportRequests.GroupBy(x => x.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct))
+            .ToDictionary(x => x.Key, x => x.Count);
+
+    public async Task<(List<SupportRequest> Items, int Total)> ListSupportRequestsAsync(int? memberId, SupportStatus? status, SupportCategory? category,
+        string? q, int page, int pageSize, CancellationToken ct)
     {
         var query = db.SupportRequests.AsNoTracking();
         if (memberId is { } id) query = query.Where(x => x.MemberId == id);
         if (status is { } st) query = query.Where(x => x.Status == st);
+        if (category is { } cat) query = query.Where(x => x.Category == cat);
         if (!string.IsNullOrWhiteSpace(q))
         {
             var term = $"%{q.Trim()}%";
@@ -53,8 +69,10 @@ public class FrontDeskRepository(AppDbContext db) : IFrontDeskRepository
                 EF.Functions.ILike(x.Member.Email, term));
         }
         var total = await query.CountAsync(ct);
-        var items = await query.Include(x => x.Member).Include(x => x.HandledBy)
-            .OrderBy(x => x.Status == SupportStatus.Resolved).ThenByDescending(x => x.CreatedAt)
+        // Needs-action first: new, in progress, waiting on member, then done.
+        var items = await query.Include(x => x.Member).Include(x => x.HandledBy).Include(x => x.CreatedBy)
+            .OrderBy(x => x.Status == SupportStatus.Open ? 0 : x.Status == SupportStatus.InProgress ? 1 : x.Status == SupportStatus.WaitingForMember ? 2 : 3)
+            .ThenByDescending(x => x.LastActivityAt)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return (items, total);
     }
