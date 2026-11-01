@@ -15,9 +15,12 @@ public sealed record GymSubscriptionSnapshot(
     bool HasPendingPayment,
     bool HasFailedPayment);
 
+public sealed record GymMemberSearchRow(int MemberId, string FullName, string? Phone, string Email, string? CardCode, bool IsActive);
+
 public interface IGymAccessRepository
 {
     Task<User?> GetMemberAsync(int memberId, CancellationToken ct);
+    Task<List<GymMemberSearchRow>> SearchMembersAsync(string term, int limit, CancellationToken ct);
     Task<User?> FindMemberByCardCodeAsync(string cardCode, CancellationToken ct);
     void AddMemberProfile(MemberProfile profile);
     Task<List<GymSubscriptionSnapshot>> ListSubscriptionsAsync(int memberId, CancellationToken ct);
@@ -33,6 +36,19 @@ public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
     public Task<User?> GetMemberAsync(int memberId, CancellationToken ct) =>
         db.Users.Include(x => x.MemberProfile)
             .FirstOrDefaultAsync(x => x.Id == memberId && x.Role == UserRole.Member, ct);
+
+    public Task<List<GymMemberSearchRow>> SearchMembersAsync(string term, int limit, CancellationToken ct)
+    {
+        var like = $"%{term}%";
+        return db.Users.AsNoTracking()
+            .Where(x => x.Role == UserRole.Member && (EF.Functions.ILike(x.FullName, like) || EF.Functions.ILike(x.Email, like) ||
+                (x.Phone != null && EF.Functions.ILike(x.Phone, like)) ||
+                (x.MemberProfile != null && x.MemberProfile.GymCardCode != null && EF.Functions.ILike(x.MemberProfile.GymCardCode, like))))
+            .OrderBy(x => x.FullName).ThenBy(x => x.Id).Take(limit)
+            .Select(x => new GymMemberSearchRow(x.Id, x.FullName, x.Phone, x.Email,
+                x.MemberProfile != null ? x.MemberProfile.GymCardCode : null, x.IsActive))
+            .ToListAsync(ct);
+    }
 
     public Task<User?> FindMemberByCardCodeAsync(string cardCode, CancellationToken ct) =>
         db.Users.Include(x => x.MemberProfile)
