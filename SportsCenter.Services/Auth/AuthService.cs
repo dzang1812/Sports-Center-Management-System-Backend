@@ -53,8 +53,12 @@ public class AuthService(IUserRepository users, IOptions<JwtOptions> jwtOptions,
     public async Task VerifyEmailAsync(string token)
     {
         var t = await users.GetTokenAsync(Hash(token), TokenPurpose.VerifyEmail);
-        if (t is null || t.UsedAt is not null || t.ExpiresAt < DateTime.UtcNow)
+        if (t is null || t.ExpiresAt < DateTime.UtcNow)
             throw new AuthException("Link xác thực không hợp lệ hoặc đã hết hạn");
+        // Idempotent: a token this same verification already succeeded with (double-submit from
+        // React StrictMode's double effect-run, a page refresh, or an email client prescanning the
+        // link) should look like success again, not fail just because it was already consumed.
+        if (t.UsedAt is not null) return;
 
         t.UsedAt = DateTime.UtcNow;
         t.User.EmailVerified = true;
