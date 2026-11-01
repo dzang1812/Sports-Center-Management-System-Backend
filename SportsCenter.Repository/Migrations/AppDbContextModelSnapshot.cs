@@ -18,7 +18,7 @@ namespace SportsCenter.Repository.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.32")
+                .HasAnnotation("ProductVersion", "8.0.33")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -596,6 +596,24 @@ namespace SportsCenter.Repository.Migrations
 
                     b.Property<string>("Certifications")
                         .HasColumnType("text");
+
+                    b.Property<int?>("ExperienceYears")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StudentAfterImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("StudentBeforeImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime?>("StudentPhotosConsentedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StudentResultSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.HasKey("UserId");
 

@@ -87,6 +87,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<MemberProfile>().HasIndex(p => p.GymCardCode).IsUnique()
             .HasFilter("\"GymCardCode\" IS NOT NULL");
         b.Entity<CoachProfile>().HasKey(p => p.UserId);
+        b.Entity<CoachProfile>().Property(p => p.StudentBeforeImageUrl).HasMaxLength(2048);
+        b.Entity<CoachProfile>().Property(p => p.StudentAfterImageUrl).HasMaxLength(2048);
+        b.Entity<CoachProfile>().Property(p => p.StudentResultSummary).HasMaxLength(1000);
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();

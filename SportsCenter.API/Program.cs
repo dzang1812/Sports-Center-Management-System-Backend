@@ -78,6 +78,8 @@ builder.Services.Configure<MailOptions>(builder.Configuration.GetSection(MailOpt
 builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(c => c.BaseAddress = new Uri("https://api.resend.com/"));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMeService, MeService>();
+builder.Services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
+builder.Services.AddScoped<CoachProfileService>();
 builder.Services.AddScoped<IUserAdminService, UserAdminService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddSingleton<IAppClock, VietnamClock>();
