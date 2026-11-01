@@ -36,8 +36,10 @@ public class SavePlanDto
 
 public record PlanItemDto(int ExerciseId, string ExerciseName, string? MuscleGroup, string? ImageUrl, int? Sets, string? Reps, string? Notes);
 public record PlanSessionDto(int Id, DayOfWeek DayOfWeek, string Focus, List<PlanItemDto> Items);
+// CoachId set = made by a coach (read-only for the member); then exactly one of MemberId / ClassId is the target.
 public record PlanDto(int Id, string Title, string? Goal, string? Description, int DaysPerWeek, bool IsActive, bool CreatedByAi,
-    DateTime CreatedAt, List<PlanSessionDto> Sessions);
+    DateTime CreatedAt, List<PlanSessionDto> Sessions, int? CoachId = null, string? CoachName = null, int? MemberId = null,
+    string? MemberName = null, int? ClassId = null, string? ClassName = null, DateOnly? StartDate = null, DateOnly? EndDate = null);
 
 public record ExerciseMediaDto(string Name, string? ImageUrl, string? VideoUrl);
 
@@ -111,11 +113,7 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
 
     public async Task<PlanDto> SavePlanAsync(int memberId, int? planId, SavePlanDto dto, CancellationToken ct)
     {
-        if (dto.Sessions.Select(s => s.DayOfWeek).Distinct().Count() != dto.Sessions.Count)
-            throw new AuthException("Mỗi ngày trong tuần chỉ có một buổi tập.");
-        var exerciseIds = dto.Sessions.SelectMany(s => s.Items).Select(i => i.ExerciseId).Distinct().ToList();
-        if (await repo.CountExercisesAsync(exerciseIds, ct) != exerciseIds.Count)
-            throw new AuthException("Có bài tập không tồn tại.");
+        await ValidateContentAsync(repo, dto, ct);
 
         TrainingPlan plan;
         if (planId is null)
@@ -126,26 +124,8 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
         else
         {
             plan = await repo.OwnedPlanAsync(memberId, planId.Value, ct) ?? throw new AuthException("Không tìm thấy lịch tập.");
-            plan.Items.Clear();
-            plan.Sessions.Clear();
         }
-
-        plan.Title = dto.Title.Trim();
-        plan.Goal = dto.Goal;
-        plan.Description = dto.Description;
-        plan.DaysPerWeek = dto.Sessions.Count;
-        foreach (var s in dto.Sessions)
-        {
-            var session = new TrainingPlanSession { DayOfWeek = s.DayOfWeek, Focus = s.Focus.Trim() };
-            plan.Sessions.Add(session);
-            var order = 0;
-            foreach (var i in s.Items)
-                plan.Items.Add(new TrainingPlanItem
-                {
-                    ExerciseId = i.ExerciseId, Session = session, OrderNo = ++order, Sets = i.Sets,
-                    RepsText = i.Reps, Reps = FirstNumber(i.Reps), Notes = i.Notes,
-                });
-        }
+        ApplyContent(plan, dto);
 
         if (dto.Activate) { await repo.DeactivatePlansAsync(memberId, ct); plan.IsActive = true; }
         else if (planId is null) plan.IsActive = false;
@@ -171,8 +151,41 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
     private static int? FirstNumber(string? text) =>
         System.Text.RegularExpressions.Regex.Match(text ?? "", @"\d+") is { Success: true } m ? int.Parse(m.Value) : null;
 
-    private static PlanDto ToDto(TrainingPlan p) => new(p.Id, p.Title, p.Goal, p.Description, p.DaysPerWeek, p.IsActive, p.CreatedByAi, p.CreatedAt,
+    // Shared by member self-service plans and coach-made plans.
+    internal static async Task ValidateContentAsync(ITrainingRepository repo, SavePlanDto dto, CancellationToken ct)
+    {
+        if (dto.Sessions.Select(s => s.DayOfWeek).Distinct().Count() != dto.Sessions.Count)
+            throw new AuthException("Mỗi ngày trong tuần chỉ có một buổi tập.");
+        var exerciseIds = dto.Sessions.SelectMany(s => s.Items).Select(i => i.ExerciseId).Distinct().ToList();
+        if (await repo.CountExercisesAsync(exerciseIds, ct) != exerciseIds.Count)
+            throw new AuthException("Có bài tập không tồn tại.");
+    }
+
+    internal static void ApplyContent(TrainingPlan plan, SavePlanDto dto)
+    {
+        plan.Items.Clear();
+        plan.Sessions.Clear();
+        plan.Title = dto.Title.Trim();
+        plan.Goal = dto.Goal;
+        plan.Description = dto.Description;
+        plan.DaysPerWeek = dto.Sessions.Count;
+        foreach (var s in dto.Sessions)
+        {
+            var session = new TrainingPlanSession { DayOfWeek = s.DayOfWeek, Focus = s.Focus.Trim() };
+            plan.Sessions.Add(session);
+            var order = 0;
+            foreach (var i in s.Items)
+                plan.Items.Add(new TrainingPlanItem
+                {
+                    ExerciseId = i.ExerciseId, Session = session, OrderNo = ++order, Sets = i.Sets,
+                    RepsText = i.Reps, Reps = FirstNumber(i.Reps), Notes = i.Notes,
+                });
+        }
+    }
+
+    internal static PlanDto ToDto(TrainingPlan p) => new(p.Id, p.Title, p.Goal, p.Description, p.DaysPerWeek, p.IsActive, p.CreatedByAi, p.CreatedAt,
         p.Sessions.OrderBy(s => ((int)s.DayOfWeek + 6) % 7).Select(s => new PlanSessionDto(s.Id, s.DayOfWeek, s.Focus,
             p.Items.Where(i => i.SessionId == s.Id).OrderBy(i => i.OrderNo)
-                .Select(i => new PlanItemDto(i.ExerciseId, i.Exercise.Name, i.Exercise.MuscleGroup, i.Exercise.ImageUrl, i.Sets, i.RepsText ?? i.Reps?.ToString(), i.Notes)).ToList())).ToList());
+                .Select(i => new PlanItemDto(i.ExerciseId, i.Exercise.Name, i.Exercise.MuscleGroup, i.Exercise.ImageUrl, i.Sets, i.RepsText ?? i.Reps?.ToString(), i.Notes)).ToList())).ToList(),
+        p.CoachId, p.Coach?.FullName, p.MemberId, p.Member?.FullName, p.ClassId, p.Class?.Name, p.StartDate, p.EndDate);
 }

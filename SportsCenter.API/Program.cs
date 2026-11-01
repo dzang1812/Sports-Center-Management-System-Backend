@@ -129,6 +129,7 @@ builder.Services.AddHostedService<SubscriptionExpiryWorker>();
 
 builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
 builder.Services.AddScoped<ITrainingService, TrainingService>();
+builder.Services.AddScoped<ICoachTrainingService, CoachTrainingService>();
 builder.Services.AddScoped<IAiRepository, AiRepository>();
 builder.Services.AddScoped<IAiUsageService, AiUsageService>();
 builder.Services.AddScoped<IWorkoutEvaluationService, WorkoutEvaluationService>();
