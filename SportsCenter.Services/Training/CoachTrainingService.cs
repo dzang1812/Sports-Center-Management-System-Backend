@@ -36,8 +36,17 @@ public record TrainingResultDto(int Id, int MemberId, string MemberName, string 
     string? SessionTitle, DateOnly? SessionDate, int? ExerciseId, string? ExerciseName, int? Sets, int? Reps, decimal? WeightKg,
     int? DurationMin, string? Notes, int RecordedById, string RecordedByName, DateTime RecordedAt);
 
+public record CreateEvaluationRequest(
+    [param: Range(1, 10)] int? Score,
+    [param: Required, StringLength(2000)] string Comment);
+
+public record EvaluationDto(int Id, int MemberId, string MemberName, int CoachId, string CoachName, int? Score, string Comment, DateTime CreatedAt);
+
 public interface ICoachTrainingService
 {
+    Task<EvaluationDto> AddEvaluationAsync(int coachId, int memberId, CreateEvaluationRequest request, CancellationToken ct);
+    Task<List<EvaluationDto>> StudentEvaluationsAsync(int coachId, int memberId, CancellationToken ct);
+    Task<List<EvaluationDto>> MyEvaluationsAsync(int memberId, CancellationToken ct);
     Task<List<TrainingResultDto>> ClassSessionResultsAsync(int coachId, int sessionId, CancellationToken ct);
     Task<List<TrainingResultDto>> SaveClassSessionResultsAsync(int coachId, int sessionId, SaveTrainingResultsRequest request, CancellationToken ct);
     Task<List<TrainingResultDto>> PtResultsAsync(int coachId, int bookingId, CancellationToken ct);
@@ -155,6 +164,31 @@ public sealed class CoachTrainingService(ITrainingRepository repo, IUserReposito
     }
 
     public Task<List<TrainingResultDto>> MyResultsAsync(int memberId, CancellationToken ct) => ResultDtosAsync(null, null, memberId, ct);
+
+    public async Task<EvaluationDto> AddEvaluationAsync(int coachId, int memberId, CreateEvaluationRequest request, CancellationToken ct)
+    {
+        await RequireStudentAsync(coachId, memberId, ct);
+        var evaluation = new ProgressEvaluation
+        {
+            MemberId = memberId, CoachId = coachId, Score = request.Score, Comment = request.Comment.Trim(), CreatedAt = clock.UtcNow,
+        };
+        repo.AddEvaluation(evaluation);
+        await repo.SaveChangesAsync(ct);
+        return (await EvaluationDtosAsync(memberId, ct)).First(e => e.Id == evaluation.Id);
+    }
+
+    // Every coach's reviews of this student, so a new coach sees the whole picture.
+    public async Task<List<EvaluationDto>> StudentEvaluationsAsync(int coachId, int memberId, CancellationToken ct)
+    {
+        await RequireStudentAsync(coachId, memberId, ct);
+        return await EvaluationDtosAsync(memberId, ct);
+    }
+
+    public Task<List<EvaluationDto>> MyEvaluationsAsync(int memberId, CancellationToken ct) => EvaluationDtosAsync(memberId, ct);
+
+    private async Task<List<EvaluationDto>> EvaluationDtosAsync(int memberId, CancellationToken ct) =>
+        (await repo.EvaluationsAsync(memberId, ct)).Select(e => new EvaluationDto(e.Id, e.MemberId, e.Member.FullName, e.CoachId, e.Coach.FullName,
+            e.Score, e.Comment, e.CreatedAt)).ToList();
 
     private async Task ReplaceResultsAsync(int coachId, int? sessionId, int? ptBookingId, HashSet<int> members,
         SaveTrainingResultsRequest request, CancellationToken ct)

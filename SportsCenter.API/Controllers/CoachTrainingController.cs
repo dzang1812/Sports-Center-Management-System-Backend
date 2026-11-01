@@ -56,6 +56,14 @@ public sealed class CoachTrainingController(ICoachTrainingService service) : Con
     [HttpGet("students/{memberId:int}/results")]
     public Task<List<TrainingResultDto>> StudentResults(int memberId, CancellationToken ct) => service.StudentResultsAsync(CoachId, memberId, ct);
 
+    [HttpGet("students/{memberId:int}/evaluations")]
+    public Task<List<EvaluationDto>> StudentEvaluations(int memberId, CancellationToken ct) =>
+        service.StudentEvaluationsAsync(CoachId, memberId, ct);
+
+    [HttpPost("students/{memberId:int}/evaluations")]
+    public Task<EvaluationDto> AddEvaluation(int memberId, CreateEvaluationRequest request, CancellationToken ct) =>
+        service.AddEvaluationAsync(CoachId, memberId, request, ct);
+
     // Plan-content validation is shared with the member endpoints, which report it as AuthException.
     private static async Task<IActionResult> Run(Func<Task<IActionResult>> action)
     {
@@ -72,4 +80,7 @@ public sealed class MyTrainingController(ICoachTrainingService service) : Contro
 
     [HttpGet("training-results")]
     public Task<List<TrainingResultDto>> Results(CancellationToken ct) => service.MyResultsAsync(MemberId, ct);
+
+    [HttpGet("evaluations")]
+    public Task<List<EvaluationDto>> Evaluations(CancellationToken ct) => service.MyEvaluationsAsync(MemberId, ct);
 }

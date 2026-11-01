@@ -34,6 +34,9 @@ public interface ITrainingRepository
     Task<List<TrainingResult>> ResultsAsync(int? sessionId, int? ptBookingId, int? memberId, CancellationToken ct);
     void AddResults(IEnumerable<TrainingResult> results);
     void RemoveResults(IEnumerable<TrainingResult> results);
+
+    void AddEvaluation(ProgressEvaluation evaluation);
+    Task<List<ProgressEvaluation>> EvaluationsAsync(int memberId, CancellationToken ct);
 }
 
 public class TrainingRepository(AppDbContext db) : ITrainingRepository
@@ -137,6 +140,12 @@ public class TrainingRepository(AppDbContext db) : ITrainingRepository
     public void AddResults(IEnumerable<TrainingResult> results) => db.TrainingResults.AddRange(results);
 
     public void RemoveResults(IEnumerable<TrainingResult> results) => db.TrainingResults.RemoveRange(results);
+
+    public void AddEvaluation(ProgressEvaluation evaluation) => db.ProgressEvaluations.Add(evaluation);
+
+    public Task<List<ProgressEvaluation>> EvaluationsAsync(int memberId, CancellationToken ct) =>
+        db.ProgressEvaluations.AsNoTracking().Include(e => e.Coach).Include(e => e.Member)
+            .Where(e => e.MemberId == memberId).OrderByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id).ToListAsync(ct);
 
     private IQueryable<int> TaughtBy(int coachId) =>
         db.ClassBookings.Where(b => b.Status != BookingStatus.Cancelled &&
