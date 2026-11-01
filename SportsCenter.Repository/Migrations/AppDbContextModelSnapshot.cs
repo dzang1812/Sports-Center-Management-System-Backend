@@ -745,6 +745,24 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("Certifications")
                         .HasColumnType("text");
 
+                    b.Property<int?>("ExperienceYears")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StudentAfterImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("StudentBeforeImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime?>("StudentPhotosConsentedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StudentResultSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.HasKey("UserId");
 
                     b.ToTable("CoachProfiles");

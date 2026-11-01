@@ -40,6 +40,11 @@ public class CoachProfile
     public User User { get; set; } = null!;
     public string? Bio { get; set; }
     public string? Certifications { get; set; }
+    public int? ExperienceYears { get; set; }
+    public string? StudentBeforeImageUrl { get; set; }
+    public string? StudentAfterImageUrl { get; set; }
+    public string? StudentResultSummary { get; set; }
+    public DateTime? StudentPhotosConsentedAt { get; set; }
     public List<Sport> Sports { get; set; } = []; // specialties; Gym/Boxing coaches can take PT
 }
 
