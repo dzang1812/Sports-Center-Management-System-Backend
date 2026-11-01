@@ -10,13 +10,14 @@ public record PtBookingKey(int SportId, int MemberId, int CoachId);
 // Personal training: coach availability, PT bookings and the PT credit on a member's subscription (PT-*).
 public interface IPtRepository
 {
-    Task<List<CoachAvailability>> GetActiveAvailabilityAsync(int coachId, CancellationToken ct);
-    Task<List<CoachAvailability>> GetActiveAvailabilityForUpdateAsync(int coachId, CancellationToken ct);
-    Task<List<CoachAvailability>> GetActiveAvailabilityForSportAsync(int coachId, int sportId, CancellationToken ct);
+    Task<List<CoachAvailability>> GetActiveAvailabilityAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
+    Task<List<CoachAvailability>> GetActiveAvailabilityForUpdateAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
+    Task<List<CoachAvailability>> GetActiveAvailabilityForSportAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct);
+    Task<List<CoachAvailability>> GetLegacyAvailabilityAsync(int coachId, CancellationToken ct);
     void AddAvailabilities(IEnumerable<CoachAvailability> items);
     Task<bool> IsAvailableAsync(int coachId, int sportId, DateOnly date, TimeOnly start, TimeOnly end, CancellationToken ct);
 
-    Task<List<PtBooking>> GetFutureConfirmedBookingsAsync(int coachId, DateOnly today, CancellationToken ct);
+    Task<List<PtBooking>> GetConfirmedBookingsInRangeAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<List<BusySlot>> GetCoachClassBusyAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<List<BusySlot>> GetCoachPtBusyAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<PtBookingKey?> GetBookingKeyAsync(int bookingId, CancellationToken ct);
@@ -30,23 +31,26 @@ public interface IPtRepository
 
 public class PtRepository(AppDbContext db) : IPtRepository
 {
-    public Task<List<CoachAvailability>> GetActiveAvailabilityAsync(int coachId, CancellationToken ct) => db.CoachAvailabilities.AsNoTracking()
-        .Where(x => x.CoachId == coachId && x.IsActive).Include(x => x.Sport).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime).ToListAsync(ct);
+    public Task<List<CoachAvailability>> GetActiveAvailabilityAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct) => db.CoachAvailabilities.AsNoTracking()
+        .Where(x => x.CoachId == coachId && x.IsActive && x.Date >= from && x.Date <= to).Include(x => x.Sport).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToListAsync(ct);
 
-    public Task<List<CoachAvailability>> GetActiveAvailabilityForUpdateAsync(int coachId, CancellationToken ct) =>
-        db.CoachAvailabilities.Where(x => x.CoachId == coachId && x.IsActive).ToListAsync(ct);
+    public Task<List<CoachAvailability>> GetActiveAvailabilityForUpdateAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct) =>
+        db.CoachAvailabilities.Where(x => x.CoachId == coachId && x.IsActive && x.Date >= from && x.Date <= to).ToListAsync(ct);
 
-    public Task<List<CoachAvailability>> GetActiveAvailabilityForSportAsync(int coachId, int sportId, CancellationToken ct) =>
-        db.CoachAvailabilities.AsNoTracking().Where(x => x.CoachId == coachId && x.SportId == sportId && x.IsActive).ToListAsync(ct);
+    public Task<List<CoachAvailability>> GetActiveAvailabilityForSportAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct) =>
+        db.CoachAvailabilities.AsNoTracking().Where(x => x.CoachId == coachId && x.SportId == sportId && x.IsActive && x.Date >= from && x.Date <= to).ToListAsync(ct);
+
+    public Task<List<CoachAvailability>> GetLegacyAvailabilityAsync(int coachId, CancellationToken ct) => db.CoachAvailabilities.AsNoTracking()
+        .Where(x => x.CoachId == coachId && x.IsActive && x.Date == null).Include(x => x.Sport).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime).ToListAsync(ct);
 
     public void AddAvailabilities(IEnumerable<CoachAvailability> items) => db.CoachAvailabilities.AddRange(items);
 
     public Task<bool> IsAvailableAsync(int coachId, int sportId, DateOnly date, TimeOnly start, TimeOnly end, CancellationToken ct) =>
         db.CoachAvailabilities.AnyAsync(x => x.CoachId == coachId && x.SportId == sportId && x.IsActive &&
-            x.DayOfWeek == date.DayOfWeek && x.StartTime <= start && x.EndTime >= end, ct);
+            x.Date == date && x.StartTime <= start && x.EndTime >= end, ct);
 
-    public Task<List<PtBooking>> GetFutureConfirmedBookingsAsync(int coachId, DateOnly today, CancellationToken ct) =>
-        db.PtBookings.Where(x => x.CoachId == coachId && x.Status == BookingStatus.Confirmed && x.Date >= today).ToListAsync(ct);
+    public Task<List<PtBooking>> GetConfirmedBookingsInRangeAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct) =>
+        db.PtBookings.AsNoTracking().Where(x => x.CoachId == coachId && x.Status == BookingStatus.Confirmed && x.Date >= from && x.Date <= to).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToListAsync(ct);
 
     public Task<List<BusySlot>> GetCoachClassBusyAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct) =>
         db.ClassSessions.AsNoTracking().Where(x => x.CoachId == coachId && x.Status != SessionStatus.Cancelled && x.Date >= from && x.Date <= to)

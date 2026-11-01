@@ -10,6 +10,8 @@ namespace SportsCenter.API.Controllers;
 public sealed class CoachAvailabilityController(IPtService service) : ControllerBase
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    [HttpGet("week")] public Task<WeekAvailabilityResponse> Week(DateOnly weekStart, CancellationToken ct) => service.GetWeekAvailabilityAsync(ActorId, weekStart, ct);
+    [HttpPut("week")] public Task<WeekAvailabilityResponse> ReplaceWeek(ReplaceWeekAvailabilityRequest request, CancellationToken ct) => service.ReplaceWeekAvailabilityAsync(ActorId, request, ct);
     [HttpGet] public Task<List<AvailabilityItem>> Get(CancellationToken ct) => service.GetAvailabilityAsync(ActorId, ct);
     [HttpPut] public Task<List<AvailabilityItem>> Put(ReplaceAvailabilityRequest request, CancellationToken ct) => service.ReplaceAvailabilityAsync(ActorId, request, ct);
 }
