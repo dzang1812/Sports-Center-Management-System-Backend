@@ -16,4 +16,6 @@ public sealed class MembershipPlansController(IMembershipPlanService service) : 
     [HttpGet("all"), Authorize(Roles = "Manager")] public Task<List<PlanDto>> ListAll(CancellationToken ct) => service.ListAsync(activeOnly: false, ct);
     [HttpPost, Authorize(Roles = "Manager")] public Task<PlanDto> Create(UpsertPlanRequest request, CancellationToken ct) => service.CreateAsync(ActorId, request, ct);
     [HttpPut("{id:int}"), Authorize(Roles = "Manager")] public Task<PlanDto> Update(int id, UpsertPlanRequest request, CancellationToken ct) => service.UpdateAsync(ActorId, id, request, ct);
+    [HttpPatch("{id:int}/status"), Authorize(Roles = "Manager")]
+    public Task<PlanDto> SetStatus(int id, ChangePlanStatusRequest request, CancellationToken ct) => service.SetActiveAsync(ActorId, id, request.IsActive!.Value, ct);
 }
