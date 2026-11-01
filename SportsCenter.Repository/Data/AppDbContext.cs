@@ -110,7 +110,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<PtBooking>().HasIndex(x => new { x.CoachId, x.Date, x.StartTime })
             .IsUnique().HasFilter("\"Status\" = 'Confirmed'");
         b.Entity<CoachAvailability>().HasIndex(x => new { x.CoachId, x.DayOfWeek, x.StartTime })
-            .IsUnique().HasFilter("\"IsActive\"");
+            .IsUnique().HasFilter("\"IsActive\" AND \"Date\" IS NULL");
+        b.Entity<CoachAvailability>().HasIndex(x => new { x.CoachId, x.Date, x.StartTime })
+            .IsUnique().HasFilter("\"IsActive\" AND \"Date\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique()
             .HasFilter("\"SessionId\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.PtBookingId, a.MemberId }).IsUnique()

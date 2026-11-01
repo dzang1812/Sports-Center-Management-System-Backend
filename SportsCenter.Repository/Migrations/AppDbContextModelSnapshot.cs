@@ -704,6 +704,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("Date")
+                        .HasColumnType("date");
+
                     b.Property<string>("DayOfWeek")
                         .IsRequired()
                         .HasColumnType("text");
@@ -724,9 +727,13 @@ namespace SportsCenter.Repository.Migrations
 
                     b.HasIndex("SportId");
 
+                    b.HasIndex("CoachId", "Date", "StartTime")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" AND \"Date\" IS NOT NULL");
+
                     b.HasIndex("CoachId", "DayOfWeek", "StartTime")
                         .IsUnique()
-                        .HasFilter("\"IsActive\"");
+                        .HasFilter("\"IsActive\" AND \"Date\" IS NULL");
 
                     b.ToTable("CoachAvailabilities", t =>
                         {

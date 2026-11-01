@@ -108,6 +108,7 @@ public class ClassBooking
 
 public class CoachAvailability
 {
+    public DateOnly? Date { get; set; } // null = legacy template; never offered as a dated slot
     public int Id { get; set; }
     public int CoachId { get; set; }
     public User Coach { get; set; } = null!;
