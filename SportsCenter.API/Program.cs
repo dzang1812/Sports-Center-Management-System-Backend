@@ -122,6 +122,7 @@ builder.Services.AddScoped<SportsCenter.Services.Operations.PaymentHistoryServic
 builder.Services.AddScoped<SportsCenter.Services.Operations.ReportTrendService>();
 builder.Services.AddScoped<SportsCenter.Services.Operations.CoachMessageService>();
 builder.Services.AddScoped<SportsCenter.Services.Operations.SubscriptionExpiryNotifier>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.ExpiringSubscriptionService>();
 builder.Services.AddHostedService<SubscriptionExpiryWorker>();
 
 builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();

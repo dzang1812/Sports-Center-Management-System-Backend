@@ -280,6 +280,16 @@ public sealed class CoachMessageService(IFrontDeskRepository repo, IUserReposito
     }
 }
 
+public sealed class ExpiringSubscriptionService(IFrontDeskRepository repo, IUserRepository users, IAppClock clock)
+{
+    public async Task<List<ExpiringSubscriptionRow>> ListAsync(int actorId, int days, CancellationToken ct)
+    {
+        await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
+        var today = DateOnly.FromDateTime(clock.LocalNow);
+        return await repo.ListExpiringSubscriptionsAsync(today, today.AddDays(Math.Clamp(days, 0, 30)), ct);
+    }
+}
+
 public sealed class SubscriptionExpiryNotifier(IFrontDeskRepository repo, INotificationRepository notifications, IAppClock clock)
 {
     public const int DaysAhead = 3;

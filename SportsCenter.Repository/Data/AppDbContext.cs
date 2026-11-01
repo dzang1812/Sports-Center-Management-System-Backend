@@ -62,6 +62,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // Accent-insensitive Vietnamese name search (EF.Functions.Unaccent).
+        b.HasPostgresExtension("unaccent");
         // Rows are soft-deleted / cancelled, never cascaded away by accident.
         foreach (var fk in b.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
             fk.DeleteBehavior = DeleteBehavior.Restrict;

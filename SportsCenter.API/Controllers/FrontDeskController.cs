@@ -65,6 +65,17 @@ public sealed class PaymentHistoryController(PaymentHistoryService service) : Co
         service.ListAsync(ActorId, memberId, page, pageSize, ct);
 }
 
+[ApiController, Authorize(Roles = "Receptionist,Manager"), Route("api/subscriptions/expiring")]
+public sealed class ExpiringSubscriptionsController(ExpiringSubscriptionService service) : ControllerBase
+{
+    private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    // Active subscriptions ending within `days` (0 = today only), not yet renewed.
+    [HttpGet]
+    public Task<List<SportsCenter.Repository.Repositories.ExpiringSubscriptionRow>> List(int days = 7, CancellationToken ct = default) =>
+        service.ListAsync(ActorId, days, ct);
+}
+
 [ApiController, Authorize(Roles = "Manager"), Route("api/reports")]
 public sealed class ReportTrendsController(ReportTrendService service) : ControllerBase
 {

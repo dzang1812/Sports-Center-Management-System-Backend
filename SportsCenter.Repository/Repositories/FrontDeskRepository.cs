@@ -7,7 +7,7 @@ namespace SportsCenter.Repository.Repositories;
 public record ClassFillRow(int ClassId, string Name, string? Coach, ClassStatus Status, ClassBookingMode BookingMode, int Capacity,
     int ActiveEnrollments, int Sessions, int ActiveBookings);
 
-public record ExpiringSubscriptionRow(int SubscriptionId, int MemberId, string PlanName, DateOnly EndDate);
+public record ExpiringSubscriptionRow(int SubscriptionId, int MemberId, string PlanName, DateOnly EndDate, string MemberName);
 
 public interface IFrontDeskRepository
 {
@@ -130,10 +130,14 @@ public class FrontDeskRepository(AppDbContext db) : IFrontDeskRepository
             .Union(db.ClassEnrollments.Where(e => e.ClassId == classId && e.Status != EnrollmentStatus.Cancelled).Select(e => e.MemberId))
             .ToListAsync(ct);
 
+    // A plan the member already renewed (a later active subscription of the same plan) is not "expiring".
     public Task<List<ExpiringSubscriptionRow>> ListExpiringSubscriptionsAsync(DateOnly from, DateOnly to, CancellationToken ct) =>
         db.MemberSubscriptions.AsNoTracking()
-            .Where(s => s.Status == SubscriptionStatus.Active && s.EndDate >= from && s.EndDate <= to)
-            .Select(s => new ExpiringSubscriptionRow(s.Id, s.MemberId, s.Plan.Name, s.EndDate)).ToListAsync(ct);
+            .Where(s => s.Status == SubscriptionStatus.Active && s.EndDate >= from && s.EndDate <= to &&
+                !db.MemberSubscriptions.Any(o => o.MemberId == s.MemberId && o.PlanId == s.PlanId &&
+                    o.Status == SubscriptionStatus.Active && o.EndDate > s.EndDate))
+            .OrderBy(s => s.EndDate).ThenBy(s => s.Id)
+            .Select(s => new ExpiringSubscriptionRow(s.Id, s.MemberId, s.Plan.Name, s.EndDate, s.Member.FullName)).ToListAsync(ct);
 
     public async Task<HashSet<string>> ExistingNotificationKeysAsync(IReadOnlyCollection<string> keys, CancellationToken ct) =>
         [.. await db.Notifications.Where(n => n.DeduplicationKey != null && keys.Contains(n.DeduplicationKey))
