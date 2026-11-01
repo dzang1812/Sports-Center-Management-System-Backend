@@ -270,15 +270,31 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
     {
         payment.Status = PaymentStatus.Paid;
         payment.PaidAt = clock.UtcNow;
-        payment.InvoiceNumber = payment.Purpose == PaymentPurpose.WalletTopUp ? $"WAL-{payment.Id:D8}" : $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
         if (payment.Purpose == PaymentPurpose.WalletTopUp)
         {
             if (payment.SubscriptionId != null) throw SchedulingException.Conflict("PAYMENT_PURPOSE_MISMATCH", "Yêu cầu nạp không được kích hoạt gói.");
             await wallet.MoveAsync(payment.MemberId, actorId, payment.Amount, "OnlineTopUp", $"payment:{payment.Id}:credit", null, payment.Id, ct);
         }
-        else if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Active;
+        else if (payment.Subscription is not null) await ActivateOrMergeSubscriptionAsync(payment, ct);
+        payment.InvoiceNumber = payment.Purpose == PaymentPurpose.WalletTopUp ? $"WAL-{payment.Id:D8}" : $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
         await repo.AddAuditAsync(actorId, "Payment.Confirmed", nameof(Payment), payment.Id,
             new { payment.PayOsOrderCode, Reference = reference }, ct);
+    }
+
+    // Done here (confirm time), not at order creation: the new row is Pending until paid,
+    // so a still-active prior subscription for the same plan is only ever extended once money has actually landed.
+    private async Task ActivateOrMergeSubscriptionAsync(Payment payment, CancellationToken ct)
+    {
+        var sub = payment.Subscription!;
+        var existing = await repo.GetLatestSubscriptionAsync(sub.MemberId, sub.PlanId, ct);
+        if (existing is null) { sub.Status = SubscriptionStatus.Active; return; }
+
+        if (sub.EndDate > existing.EndDate) existing.EndDate = sub.EndDate;
+        existing.RemainingPtSessions += sub.RemainingPtSessions;
+        sub.Status = SubscriptionStatus.Cancelled;
+        payment.SubscriptionId = existing.Id;
+        await repo.AddAuditAsync(payment.MemberId, "Subscription.MergedIntoExisting", nameof(MemberSubscription), existing.Id,
+            new { AbsorbedSubscriptionId = sub.Id, existing.EndDate, existing.RemainingPtSessions }, ct);
     }
 
     private static DateOnly CalculateEndDate(DateOnly startDate, MembershipPlan plan) =>
