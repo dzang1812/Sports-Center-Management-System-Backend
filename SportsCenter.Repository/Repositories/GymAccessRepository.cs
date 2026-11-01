@@ -41,7 +41,8 @@ public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
     {
         var like = $"%{term}%";
         return db.Users.AsNoTracking()
-            .Where(x => x.Role == UserRole.Member && (EF.Functions.ILike(x.FullName, like) || EF.Functions.ILike(x.Email, like) ||
+            .Where(x => x.Role == UserRole.Member && (EF.Functions.ILike(EF.Functions.Unaccent(x.FullName), EF.Functions.Unaccent(like)) ||
+                EF.Functions.ILike(x.Email, like) ||
                 (x.Phone != null && EF.Functions.ILike(x.Phone, like)) ||
                 (x.MemberProfile != null && x.MemberProfile.GymCardCode != null && EF.Functions.ILike(x.MemberProfile.GymCardCode, like))))
             .OrderBy(x => x.FullName).ThenBy(x => x.Id).Take(limit)
