@@ -10,7 +10,8 @@ public record PtPriceRow(int Id, string Name, decimal? PtSinglePrice);
 public record CourseCatalogRow(int Id, string Name, string? Description, Level Level, int SportId, string Sport,
     int? CoachId, string? Coach, int RoomId, string Room, int Capacity, DateOnly StartDate, DateOnly EndDate,
     ClassStatus Status, decimal CourseFee, int ExpectedSessions, DateTime? EnrollmentClosesAt, DateTime? PublishedAt, int Enrolled,
-    DateTime? CourseStartsAt, DateOnly? FirstSessionDate, DateOnly? LastSessionDate)
+    DateTime? CourseStartsAt, DateOnly? FirstSessionDate, DateOnly? LastSessionDate,
+    SportStatus SportStatus, bool SportHasClasses)
 {
     public int DurationWeeks => (int)Math.Ceiling((EndDate.DayNumber - StartDate.DayNumber + 1) / 7m);
     public decimal? SessionPrice => ExpectedSessions > 0 && CourseFee % ExpectedSessions == 0 ? CourseFee / ExpectedSessions : null;
@@ -109,7 +110,8 @@ public sealed class CommerceRepository(AppDbContext db) : ICommerceRepository
             x.EnrollmentClosesAt, x.PublishedAt,
             x.Enrollments.Count(e => e.OrderId != null && e.Status == EnrollmentStatus.Confirmed), x.CourseStartsAt,
             x.Sessions.Where(s => s.Status != SessionStatus.Cancelled).Min(s => (DateOnly?)s.Date),
-            x.Sessions.Where(s => s.Status != SessionStatus.Cancelled).Max(s => (DateOnly?)s.Date))).ToListAsync(ct);
+            x.Sessions.Where(s => s.Status != SessionStatus.Cancelled).Max(s => (DateOnly?)s.Date),
+            x.Sport.Status, x.Sport.HasClasses)).ToListAsync(ct);
     }
     public Task<List<CourseSessionRow>> ListCourseScheduleAsync(int courseId, CancellationToken ct) =>
         db.ClassSessions.AsNoTracking().Where(x => x.ClassId == courseId).OrderBy(x => x.Date).ThenBy(x => x.StartTime)

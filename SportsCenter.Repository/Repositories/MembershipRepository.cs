@@ -119,5 +119,32 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             activeSubscriptions, expiredSubscriptions, newClassBookings);
     }
 
+    public async Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
+        string search, int page, int pageSize, CancellationToken ct)
+    {
+        // Wallet funding is cash-in, not service revenue. Never include pending/failed payments or refunds.
+        var receipts = db.Payments.AsNoTracking().Where(p => p.Purpose == PaymentPurpose.WalletTopUp
+            && p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            var memberId = int.TryParse(term, out var id) ? id : 0;
+            receipts = receipts.Where(p => p.MemberId == memberId || (p.InvoiceNumber != null && p.InvoiceNumber.ToLower().Contains(term))
+                || p.Member.FullName.ToLower().Contains(term) || p.Member.Email.ToLower().Contains(term)
+                || (p.ReceivedBy != null && p.ReceivedBy.FullName.ToLower().Contains(term)));
+        }
+        var summary = await receipts.GroupBy(_ => 1).Select(g => new
+        {
+            Total = g.Count(), Amount = g.Sum(p => p.Amount),
+            Cash = g.Sum(p => p.Method == PaymentMethod.Cash ? p.Amount : 0),
+            Bank = g.Sum(p => p.Method == PaymentMethod.BankTransfer ? p.Amount : 0),
+        }).FirstOrDefaultAsync(ct);
+        var items = await receipts.OrderByDescending(p => p.PaidAt).ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(p => new WalletReceiptRow(p.Id, p.InvoiceNumber, p.MemberId, p.Member.FullName,
+                p.ReceivedById, p.ReceivedBy != null ? p.ReceivedBy.FullName : null, p.Amount, p.Method, p.PaidAt)).ToListAsync(ct);
+        return new(items, summary?.Total ?? 0, summary?.Amount ?? 0, summary?.Cash ?? 0, summary?.Bank ?? 0);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

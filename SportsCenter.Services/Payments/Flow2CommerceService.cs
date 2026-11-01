@@ -56,7 +56,13 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
     {
         var user = await ActiveAsync(actor, ct);
         var items = await repo.ListCoursesAsync(user.Role == UserRole.Manager, ct);
-        return items.Select(x => new { course = x, canEnroll = x.Status == ClassStatus.Open && x.PublishedAt != null && x.EnrollmentClosesAt > clock.UtcNow && x.CourseStartsAt > clock.UtcNow && x.Enrolled < x.Capacity });
+        return items.Select(x => new
+        {
+            course = x,
+            canEnroll = x.SportStatus == SportStatus.Active && x.SportHasClasses && x.Status == ClassStatus.Open && x.PublishedAt != null && x.EnrollmentClosesAt > clock.UtcNow && x.CourseStartsAt > clock.UtcNow && x.Enrolled < x.Capacity,
+            enrollmentUnavailableReason = x.SportStatus != SportStatus.Active ? "Bộ môn đang ngừng hoạt động."
+                : !x.SportHasClasses ? "Bộ môn chưa bật lớp/khóa học. Vui lòng liên hệ quản lý." : null,
+        });
     }
 
     public async Task<object> CourseAsync(int actor, int id, CancellationToken ct)
@@ -405,7 +411,10 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         WalletService.ValidateMoney(c.CourseFee);
         if (c.EnrollmentClosesAt > clock.ToUtc(sessions[0].Date, sessions[0].StartTime)) throw new SchedulingException("COURSE_CUTOFF_AFTER_START", "Hạn đăng ký không được sau buổi học đầu tiên.", 409, new { field = "enrollmentClosesAt" });
         var sport = await repo.GetSportAsync(c.SportId, ct);
-        if (sport.Status != SportStatus.Active || !sport.HasClasses) throw SchedulingException.Conflict("SPORT_UNAVAILABLE", "Bộ môn không hợp lệ.");
+        if (sport.Status != SportStatus.Active)
+            throw SchedulingException.Conflict("SPORT_UNAVAILABLE", $"Bộ môn {sport.Name} đang ngừng hoạt động. Vui lòng liên hệ quản lý.");
+        if (!sport.HasClasses)
+            throw SchedulingException.Conflict("SPORT_UNAVAILABLE", $"Bộ môn {sport.Name} chưa bật lớp/khóa học. Quản lý cần bật quyền lớp học cho bộ môn này.");
         foreach (var s in sessions)
         {
             if (s.CoachId is not { } coach || !await users.IsCoachForSportAsync(coach, c.SportId, ct) || s.Room.Status != RoomStatus.Active || s.Capacity > s.Room.Capacity || s.Capacity < c.Capacity)
