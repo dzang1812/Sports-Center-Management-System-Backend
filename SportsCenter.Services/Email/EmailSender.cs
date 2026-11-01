@@ -18,7 +18,7 @@ public class MailOptions
 
 public interface IEmailSender
 {
-    Task SendAsync(string to, string subject, string body);
+    Task SendAsync(string to, string subject, string body, string? html = null);
 }
 
 // Sends via Resend's REST API (https://resend.com/docs/api-reference/emails/send-email) instead of raw
@@ -29,7 +29,7 @@ public class ResendEmailSender(HttpClient http, IOptions<MailOptions> options, I
 {
     private readonly MailOptions _o = options.Value;
 
-    public async Task SendAsync(string to, string subject, string body)
+    public async Task SendAsync(string to, string subject, string body, string? html = null)
     {
         if (string.IsNullOrWhiteSpace(_o.ApiKey))
         {
@@ -40,7 +40,7 @@ public class ResendEmailSender(HttpClient http, IOptions<MailOptions> options, I
         var from = string.IsNullOrWhiteSpace(_o.DisplayName) ? _o.From : $"{_o.DisplayName} <{_o.From}>";
         using var request = new HttpRequestMessage(HttpMethod.Post, "emails")
         {
-            Content = JsonContent.Create(new { from, to = new[] { to }, subject, text = body }),
+            Content = JsonContent.Create(new { from, to = new[] { to }, subject, text = body, html }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _o.ApiKey);
 
