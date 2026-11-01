@@ -99,6 +99,7 @@ builder.Services.AddScoped<CoachTeachingService>();
 builder.Services.AddScoped<ICommerceRepository, CommerceRepository>();
 builder.Services.AddScoped<WalletService>();
 builder.Services.AddScoped<Flow2CommerceService>();
+builder.Services.AddScoped<MembershipWalletPurchaseService>();
 builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddScoped<IClassScheduleService, ClassScheduleService>();
 builder.Services.AddScoped<IClassBookingService, ClassBookingService>();

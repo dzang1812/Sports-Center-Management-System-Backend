@@ -53,6 +53,15 @@ public sealed class CoursesController(Flow2CommerceService service) : Controller
     public Task<int> CancelSession(int id, int sessionId, CourseSessionCancellation body, CancellationToken ct) => service.CancelSessionAsync(Actor, id, sessionId, body, Key, ct);
 }
 
+[ApiController, Route("api/membership-plans"), Authorize(Roles = "Member,Receptionist")]
+public sealed class MembershipPlanPurchasesController(MembershipWalletPurchaseService service) : ControllerBase
+{
+    private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    [HttpPost("{planId:int}/purchase")]
+    public Task<MembershipPurchaseResult> Buy(int planId, BuyRequest body, CancellationToken ct) =>
+        service.BuyAsync(Actor, planId, body, Request.Headers["Idempotency-Key"].FirstOrDefault() ?? "", ct);
+}
+
 [ApiController, Route("api/pt/packages"), Authorize(Roles = "Member,Receptionist")]
 public sealed class PtPackagesController(Flow2CommerceService service) : ControllerBase
 {
