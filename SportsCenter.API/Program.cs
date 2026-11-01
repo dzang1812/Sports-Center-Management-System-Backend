@@ -94,6 +94,8 @@ builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
 builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<IPtRepository, PtRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+builder.Services.AddScoped<ICoachTeachingRepository, CoachTeachingRepository>();
+builder.Services.AddScoped<CoachTeachingService>();
 builder.Services.AddScoped<ICommerceRepository, CommerceRepository>();
 builder.Services.AddScoped<WalletService>();
 builder.Services.AddScoped<Flow2CommerceService>();
