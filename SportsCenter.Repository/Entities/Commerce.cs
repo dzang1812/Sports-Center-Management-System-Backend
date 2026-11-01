@@ -3,7 +3,7 @@ namespace SportsCenter.Repository.Entities;
 public enum ClassBookingMode { LegacySession, CourseEnrollment }
 public enum PtFundingSource { LegacyCredit, PackageCredit, Wallet }
 public enum PaymentPurpose { LegacySubscription, WalletTopUp }
-public enum CommerceOrderKind { Course, PtSingle, PtPackage }
+public enum CommerceOrderKind { Course, PtSingle, PtPackage, Membership }
 
 public class MemberWallet
 {

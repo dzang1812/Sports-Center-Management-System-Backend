@@ -331,6 +331,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             await tx.LockAsync([new(ScheduleResourceType.Member, snap.MemberId)], token);
             var sub = await repo.GetSubscriptionAsync(subId, token);
             var order = await repo.GetOrderAsync(sub.PurchaseOrderId, token);
+            if (order.Kind != CommerceOrderKind.PtPackage)
+                throw SchedulingException.Conflict("PT_PACKAGE_REQUIRED", "Chỉ hoàn gói PT tại chức năng này. Gói tự tập vui lòng liên hệ hỗ trợ.");
             if (order.RefundedAmount == order.PaidAmount) return subId;
             if (sub.EverUsedPtCredit || sub.RemainingPtSessions != sub.SnapshotPtCredits || await repo.SubscriptionHasPtBookingsAsync(subId, token))
                 throw SchedulingException.Conflict("PACKAGE_REFUND_SUPPORT_REQUIRED", "Gói đã sử dụng/giữ credit; liên hệ hỗ trợ, không tự hoàn một phần.");

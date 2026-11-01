@@ -67,7 +67,9 @@ public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
                 x.EndDate,
                 x.Status,
                 x.IncludesGymAccess,
-                db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Paid),
+                x.PurchaseOrderId != null
+                    ? x.PurchaseOrder!.Kind == CommerceOrderKind.Membership && x.PurchaseOrder.PaidAmount > x.PurchaseOrder.RefundedAmount
+                    : db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Paid),
                 db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending),
                 db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Failed)))
             .ToListAsync(ct);
