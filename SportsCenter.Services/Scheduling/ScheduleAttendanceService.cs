@@ -24,7 +24,7 @@ public record CoachScheduleItem(string Type, int ReferenceId, string Title, stri
     AttendanceStatus? CoachAttendanceStatus = null, DateTime? CoachCheckedInAt = null);
 public record RosterItem(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus Status,
     bool AttendanceRecorded = false, bool AttendanceFinalized = false, string CheckInState = "NotCheckedIn",
-    DateTime? CheckedInAt = null, AttendanceSource? Source = null);
+    DateTime? CheckedInAt = null, AttendanceSource? Source = null, RosterMemberProfile? Profile = null);
 public record AttendanceEntry(int MemberId, AttendanceStatus Status = AttendanceStatus.Absent);
 public record BulkAttendanceRequest([param: Required, MinLength(1)] List<AttendanceEntry> Items);
 public record ClassCheckInRequest([param: Required, StringLength(64, MinimumLength = 6)] string Code);
@@ -290,14 +290,14 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         var ended = clock.ToUtc(x.Date, x.EndTime) <= clock.UtcNow;
         var state = x.Status?.ToString() ?? (ended ? AttendanceStatus.Absent.ToString() : "NotCheckedIn");
         return new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status ?? AttendanceStatus.Absent,
-            x.Status is not null, ended, state, x.CheckedInAt, x.Source);
+            x.Status is not null, ended, state, x.CheckedInAt, x.Source, x.Profile);
     }
 
     private static RosterItem ToPtRosterItem(RosterRow x)
     {
         var state = x.Status?.ToString() ?? (x.LegacyFinalized ? AttendanceStatus.Absent.ToString() : "NotCheckedIn");
         return new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status ?? AttendanceStatus.Absent,
-            x.Status is not null, x.LegacyFinalized, state, x.CheckedInAt, x.Source);
+            x.Status is not null, x.LegacyFinalized, state, x.CheckedInAt, x.Source, x.Profile);
     }
 
     private void ValidateCheckInWindow(ClassSession session)
