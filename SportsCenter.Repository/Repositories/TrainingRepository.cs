@@ -26,6 +26,14 @@ public interface ITrainingRepository
     Task<List<Class>> CoachClassesAsync(int coachId, CancellationToken ct);
     Task<List<TrainingPlan>> CoachPlansAsync(int coachId, int? memberId, int? classId, CancellationToken ct);
     Task<TrainingPlan?> CoachOwnedPlanAsync(int coachId, int planId, CancellationToken ct);
+
+    Task<ClassSession?> ClassSessionAsync(int sessionId, CancellationToken ct);
+    Task<List<int>> ClassSessionMemberIdsAsync(int sessionId, CancellationToken ct);
+    Task<PtBooking?> PtBookingAsync(int bookingId, CancellationToken ct);
+    Task<List<TrainingResult>> TrackedResultsAsync(int? sessionId, int? ptBookingId, CancellationToken ct);
+    Task<List<TrainingResult>> ResultsAsync(int? sessionId, int? ptBookingId, int? memberId, CancellationToken ct);
+    void AddResults(IEnumerable<TrainingResult> results);
+    void RemoveResults(IEnumerable<TrainingResult> results);
 }
 
 public class TrainingRepository(AppDbContext db) : ITrainingRepository
@@ -105,6 +113,30 @@ public class TrainingRepository(AppDbContext db) : ITrainingRepository
     public Task<TrainingPlan?> CoachOwnedPlanAsync(int coachId, int planId, CancellationToken ct) =>
         db.TrainingPlans.AsSplitQuery().Include(x => x.Sessions).Include(x => x.Items)
             .FirstOrDefaultAsync(x => x.Id == planId && x.CoachId == coachId, ct);
+
+    public Task<ClassSession?> ClassSessionAsync(int sessionId, CancellationToken ct) =>
+        db.ClassSessions.AsNoTracking().Include(s => s.Class).FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+
+    public Task<List<int>> ClassSessionMemberIdsAsync(int sessionId, CancellationToken ct) =>
+        db.ClassBookings.Where(b => b.SessionId == sessionId && b.Status != BookingStatus.Cancelled).Select(b => b.MemberId).ToListAsync(ct);
+
+    public Task<PtBooking?> PtBookingAsync(int bookingId, CancellationToken ct) =>
+        db.PtBookings.AsNoTracking().FirstOrDefaultAsync(p => p.Id == bookingId, ct);
+
+    public Task<List<TrainingResult>> TrackedResultsAsync(int? sessionId, int? ptBookingId, CancellationToken ct) =>
+        db.TrainingResults.Where(r => sessionId != null ? r.SessionId == sessionId : r.PtBookingId == ptBookingId).ToListAsync(ct);
+
+    public Task<List<TrainingResult>> ResultsAsync(int? sessionId, int? ptBookingId, int? memberId, CancellationToken ct) =>
+        db.TrainingResults.AsNoTracking()
+            .Include(r => r.Member).Include(r => r.RecordedBy).Include(r => r.Exercise)
+            .Include(r => r.Session!).ThenInclude(s => s.Class).Include(r => r.PtBooking!).ThenInclude(p => p.Sport)
+            .Where(r => (sessionId == null || r.SessionId == sessionId) && (ptBookingId == null || r.PtBookingId == ptBookingId) &&
+                (memberId == null || r.MemberId == memberId))
+            .OrderByDescending(r => r.RecordedAt).ThenBy(r => r.Id).ToListAsync(ct);
+
+    public void AddResults(IEnumerable<TrainingResult> results) => db.TrainingResults.AddRange(results);
+
+    public void RemoveResults(IEnumerable<TrainingResult> results) => db.TrainingResults.RemoveRange(results);
 
     private IQueryable<int> TaughtBy(int coachId) =>
         db.ClassBookings.Where(b => b.Status != BookingStatus.Cancelled &&

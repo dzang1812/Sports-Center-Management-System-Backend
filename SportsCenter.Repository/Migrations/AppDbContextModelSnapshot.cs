@@ -1781,6 +1781,9 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
+                    b.Property<int?>("PtBookingId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("RecordedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1805,6 +1808,8 @@ namespace SportsCenter.Repository.Migrations
                     b.HasIndex("ExerciseId");
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("PtBookingId");
 
                     b.HasIndex("RecordedById");
 
@@ -2661,6 +2666,11 @@ namespace SportsCenter.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SportsCenter.Repository.Entities.PtBooking", "PtBooking")
+                        .WithMany()
+                        .HasForeignKey("PtBookingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SportsCenter.Repository.Entities.User", "RecordedBy")
                         .WithMany()
                         .HasForeignKey("RecordedById")
@@ -2675,6 +2685,8 @@ namespace SportsCenter.Repository.Migrations
                     b.Navigation("Exercise");
 
                     b.Navigation("Member");
+
+                    b.Navigation("PtBooking");
 
                     b.Navigation("RecordedBy");
 

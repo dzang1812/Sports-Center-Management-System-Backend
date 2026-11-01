@@ -37,10 +37,39 @@ public sealed class CoachTrainingController(ICoachTrainingService service) : Con
         return NoContent();
     }
 
+    [HttpGet("sessions/class/{sessionId:int}/results")]
+    public Task<List<TrainingResultDto>> ClassResults(int sessionId, CancellationToken ct) =>
+        service.ClassSessionResultsAsync(CoachId, sessionId, ct);
+
+    [HttpPut("sessions/class/{sessionId:int}/results")]
+    public Task<List<TrainingResultDto>> SaveClassResults(int sessionId, SaveTrainingResultsRequest request, CancellationToken ct) =>
+        service.SaveClassSessionResultsAsync(CoachId, sessionId, request, ct);
+
+    [HttpGet("sessions/pt/{bookingId:int}/results")]
+    public Task<List<TrainingResultDto>> PtResults(int bookingId, CancellationToken ct) => service.PtResultsAsync(CoachId, bookingId, ct);
+
+    [HttpPut("sessions/pt/{bookingId:int}/results")]
+    public Task<List<TrainingResultDto>> SavePtResults(int bookingId, SaveTrainingResultsRequest request, CancellationToken ct) =>
+        service.SavePtResultsAsync(CoachId, bookingId, request, ct);
+
+    // A student's full result history (every coach), for progress review.
+    [HttpGet("students/{memberId:int}/results")]
+    public Task<List<TrainingResultDto>> StudentResults(int memberId, CancellationToken ct) => service.StudentResultsAsync(CoachId, memberId, ct);
+
     // Plan-content validation is shared with the member endpoints, which report it as AuthException.
     private static async Task<IActionResult> Run(Func<Task<IActionResult>> action)
     {
         try { return await action(); }
         catch (AuthException ex) { return new BadRequestObjectResult(new { message = ex.Message }); }
     }
+}
+
+// Member side of Flow 4: what coaches recorded about me. Plans are listed by GET /api/member/training-plans.
+[ApiController, Authorize(Roles = "Member"), Route("api/me")]
+public sealed class MyTrainingController(ICoachTrainingService service) : ControllerBase
+{
+    private int MemberId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    [HttpGet("training-results")]
+    public Task<List<TrainingResultDto>> Results(CancellationToken ct) => service.MyResultsAsync(MemberId, ct);
 }
