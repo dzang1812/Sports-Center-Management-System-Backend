@@ -7,6 +7,7 @@ public class AiUsageCheckResult
     public bool Allowed { get; set; }
     public string? Code { get; set; }
     public string? Message { get; set; }
+    public int? Remaining { get; set; } // anonymous chat only: questions left today for this visitor
 
     public static AiUsageCheckResult Allow() => new() { Allowed = true };
     public static AiUsageCheckResult Deny(string code, string message) => new() { Allowed = false, Code = code, Message = message };
@@ -32,6 +33,25 @@ public class AiSuggestionDto
 public class ChatRequestDto
 {
     public string Message { get; set; } = "";
+}
+
+public class PublicChatTurnDto
+{
+    public string Role { get; set; } = ""; // user | assistant
+    public string Content { get; set; } = "";
+}
+
+// Visitors are not logged in: the client keeps the short conversation and sends the last few turns back.
+public class PublicChatRequestDto
+{
+    public string Message { get; set; } = "";
+    public List<PublicChatTurnDto> History { get; set; } = [];
+}
+
+public class PublicChatResponseDto
+{
+    public string Response { get; set; } = "";
+    public int Remaining { get; set; }
 }
 
 public class ChatResponseDto
