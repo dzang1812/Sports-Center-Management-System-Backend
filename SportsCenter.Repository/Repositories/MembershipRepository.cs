@@ -49,6 +49,22 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .ToDictionaryAsync(x => x.SubscriptionId, x => x.Status, ct);
     }
 
+    public Task<MemberSubscription?> FindOwnedSubscriptionAsync(int memberId, int subscriptionId, CancellationToken ct) =>
+        db.MemberSubscriptions.Include(x => x.Plan)
+            .SingleOrDefaultAsync(x => x.Id == subscriptionId && x.MemberId == memberId, ct);
+
+    public Task<SubscriptionCancellationBlockers> GetCancellationBlockersAsync(int subscriptionId, DateOnly today,
+        TimeOnly localTime, CancellationToken ct) =>
+        db.MemberSubscriptions.Where(x => x.Id == subscriptionId).Select(x => new SubscriptionCancellationBlockers(
+            db.CheckIns.Any(v => v.SubscriptionId == x.Id && v.CheckedOutAt == null),
+            db.ClassBookings.Count(b => b.SubscriptionId == x.Id && b.Status == BookingStatus.Confirmed &&
+                b.Session.Status == SessionStatus.Scheduled &&
+                (b.Session.Date > today || b.Session.Date == today && b.Session.EndTime > localTime)),
+            db.PtBookings.Count(b => b.SubscriptionId == x.Id && b.Status == BookingStatus.Confirmed &&
+                (b.Date > today || b.Date == today && b.EndTime > localTime)),
+            db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending)))
+            .SingleAsync(ct);
+
     public Task<Payment?> GetPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription!).ThenInclude(x => x.Plan).FirstOrDefaultAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending && x.Subscription != null && x.Subscription.PlanId == planId, ct);
 
