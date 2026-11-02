@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProgressEvaluation> ProgressEvaluations => Set<ProgressEvaluation>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AiSuggestion> AiSuggestions => Set<AiSuggestion>();
     public DbSet<AiChatMessage> AiChatMessages => Set<AiChatMessage>();
@@ -61,6 +62,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // Accent-insensitive Vietnamese name search (EF.Functions.Unaccent).
+        b.HasPostgresExtension("unaccent");
         // Rows are soft-deleted / cancelled, never cascaded away by accident.
         foreach (var fk in b.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
             fk.DeleteBehavior = DeleteBehavior.Restrict;
@@ -93,6 +96,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<MemberProfile>().HasIndex(p => p.GymCardCode).IsUnique()
             .HasFilter("\"GymCardCode\" IS NOT NULL");
         b.Entity<CoachProfile>().HasKey(p => p.UserId);
+        b.Entity<CoachProfile>().Property(p => p.StudentBeforeImageUrl).HasMaxLength(2048);
+        b.Entity<CoachProfile>().Property(p => p.StudentAfterImageUrl).HasMaxLength(2048);
+        b.Entity<CoachProfile>().Property(p => p.StudentResultSummary).HasMaxLength(1000);
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
@@ -104,7 +110,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<PtBooking>().HasIndex(x => new { x.CoachId, x.Date, x.StartTime })
             .IsUnique().HasFilter("\"Status\" = 'Confirmed'");
         b.Entity<CoachAvailability>().HasIndex(x => new { x.CoachId, x.DayOfWeek, x.StartTime })
-            .IsUnique().HasFilter("\"IsActive\"");
+            .IsUnique().HasFilter("\"IsActive\" AND \"Date\" IS NULL");
+        b.Entity<CoachAvailability>().HasIndex(x => new { x.CoachId, x.Date, x.StartTime })
+            .IsUnique().HasFilter("\"IsActive\" AND \"Date\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.SessionId, a.MemberId }).IsUnique()
             .HasFilter("\"SessionId\" IS NOT NULL");
         b.Entity<Attendance>().HasIndex(a => new { a.PtBookingId, a.MemberId }).IsUnique()
@@ -112,6 +120,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<CoachSessionAttendance>().HasIndex(a => new { a.SessionId, a.CoachId }).IsUnique();
         b.Entity<ClassSession>().Property(x => x.CheckInCodeHash).HasMaxLength(64);
         b.Entity<Notification>().HasIndex(n => n.DeduplicationKey).IsUnique();
+        b.Entity<SupportRequest>().Property(x => x.Subject).HasMaxLength(150);
+        b.Entity<SupportRequest>().HasIndex(x => new { x.Status, x.LastActivityAt });
+        b.Entity<SupportMessage>().Property(x => x.Body).HasMaxLength(2000);
         b.Entity<Payment>().HasIndex(p => p.InvoiceNumber).IsUnique();
         b.Entity<Payment>().HasIndex(p => p.PayOsOrderCode).IsUnique();
         b.Entity<CheckIn>().HasIndex(x => x.MemberId).IsUnique()

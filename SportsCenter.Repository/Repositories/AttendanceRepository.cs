@@ -9,7 +9,11 @@ public record AttendedRow(int ReferenceId, string Title, DateOnly Date, TimeOnly
 public record CoachSessionRow(ClassSession Session, string Sport, string Room, int Participants,
     AttendanceStatus? CoachAttendanceStatus, DateTime? CoachCheckedInAt);
 public record RosterRow(int MemberId, string FullName, string Email, int BookingId, AttendanceStatus? Status,
-    DateOnly Date, TimeOnly EndTime, DateTime? CheckedInAt, AttendanceSource? Source, bool LegacyFinalized);
+    DateOnly Date, TimeOnly EndTime, DateTime? CheckedInAt, AttendanceSource? Source, bool LegacyFinalized,
+    RosterMemberProfile? Profile = null);
+// What the coach needs to know about a member to plan their training.
+public record RosterMemberProfile(string? Phone, Gender? Gender, DateOnly? DateOfBirth, decimal? HeightCm, decimal? WeightKg,
+    TrainingGoal? Goal, Level? Level);
 public record ClassCheckInBookingRow(int BookingId, int? SubscriptionId, int SportId);
 
 // Schedules and attendance reads/writes (ATT-01, BK-03, CLS-06).
@@ -135,7 +139,9 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
             x.Session.Date, x.Session.EndTime,
             db.Attendances.Where(a => a.SessionId == sessionId && a.MemberId == x.MemberId).Select(a => (DateTime?)a.MarkedAt).FirstOrDefault(),
             db.Attendances.Where(a => a.SessionId == sessionId && a.MemberId == x.MemberId).Select(a => (AttendanceSource?)a.Source).FirstOrDefault(),
-            x.Session.AttendanceFinalizedAt != null)).ToListAsync(ct);
+            x.Session.AttendanceFinalizedAt != null,
+            new RosterMemberProfile(x.Member.Phone, x.Member.Gender, x.Member.DateOfBirth, x.Member.MemberProfile!.HeightCm,
+                x.Member.MemberProfile.WeightKg, x.Member.MemberProfile.Goal, (Level?)x.Member.MemberProfile.Level))).ToListAsync(ct);
 
     public Task<List<RosterRow>> GetPtRosterAsync(int bookingId, CancellationToken ct) => db.PtBookings.AsNoTracking()
         .Where(x => x.Id == bookingId && x.Status == BookingStatus.Confirmed)
@@ -144,5 +150,7 @@ public class AttendanceRepository(AppDbContext db) : IAttendanceRepository
             x.Date, x.EndTime,
             db.Attendances.Where(a => a.PtBookingId == bookingId && a.MemberId == x.MemberId).Select(a => (DateTime?)a.MarkedAt).FirstOrDefault(),
             db.Attendances.Where(a => a.PtBookingId == bookingId && a.MemberId == x.MemberId).Select(a => (AttendanceSource?)a.Source).FirstOrDefault(),
-            x.AttendanceFinalizedAt != null)).ToListAsync(ct);
+            x.AttendanceFinalizedAt != null,
+            new RosterMemberProfile(x.Member.Phone, x.Member.Gender, x.Member.DateOfBirth, x.Member.MemberProfile!.HeightCm,
+                x.Member.MemberProfile.WeightKg, x.Member.MemberProfile.Goal, (Level?)x.Member.MemberProfile.Level))).ToListAsync(ct);
 }

@@ -7,7 +7,7 @@ using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.Services.Payments;
 
-public record CashTopUpRequest(int MemberId, decimal Amount, string ReceiptReference);
+public record CashTopUpRequest(int MemberId, decimal Amount, string? ReceiptReference = null);
 public record OnlineTopUpRequest(decimal Amount);
 public record WalletDto(int MemberId, decimal Balance, decimal LedgerBalance);
 public record WalletEntryDto(int Id, decimal Amount, decimal BalanceAfter, string Kind, string Reference,
@@ -51,10 +51,12 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
             await users.EnsureActiveActorAsync(actorId, UserRole.Receptionist, token);
             var member = await TargetAsync(actorId, request.MemberId, true, token);
             ValidateMoney(request.Amount);
-            if (string.IsNullOrWhiteSpace(request.ReceiptReference) || request.ReceiptReference.Trim().Length > 100)
-                throw new SchedulingException("RECEIPT_REQUIRED", "Cần mã biên nhận duy nhất, tối đa 100 ký tự.");
+            if (request.ReceiptReference?.Trim().Length > 100)
+                throw new SchedulingException("RECEIPT_INVALID", "Mã tham chiếu biên nhận tối đa 100 ký tự.");
             await tx.LockAsync([new(ScheduleResourceType.Member, member)], token);
-            var reference = "cash:" + request.ReceiptReference.Trim();
+            // The replay key identifies this cash collection even when the client supplies no reference.
+            var reference = string.IsNullOrWhiteSpace(request.ReceiptReference)
+                ? $"cash:auto:{actorId}:{key}" : "cash:" + request.ReceiptReference.Trim();
             if (await repo.PaymentReferenceExistsAsync(reference, token))
                 throw SchedulingException.Conflict("RECEIPT_EXISTS", "Biên nhận đã ghi nhận; không nạp lần hai.");
             var payment = new Payment { MemberId = member, ReceivedById = actorId, Amount = request.Amount,
@@ -62,7 +64,7 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
                 ProviderReference = reference, PaidAt = clock.UtcNow };
             repo.Add(payment); await tx.SaveChangesAsync(token);
             payment.PayOsOrderCode = payment.Id;
-            payment.InvoiceNumber = $"WAL-{payment.Id}";
+            payment.InvoiceNumber = $"WAL-{payment.Id:D8}";
             await MoveAsync(member, actorId, request.Amount, "CashTopUp", $"payment:{payment.Id}:credit", null, payment.Id, token);
             return payment.Id;
         }, ct);

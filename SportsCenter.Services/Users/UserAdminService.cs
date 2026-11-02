@@ -25,12 +25,18 @@ public record UpdateUserRequest([param: Required(ErrorMessage = "Họ tên là b
 
 public record CreatedUserResponse(UserListItem User, string TempPassword);
 
+public record CreateMemberRequest(
+    [param: Required(ErrorMessage = "Email là bắt buộc"), EmailAddress(ErrorMessage = "Email sai định dạng")] string Email,
+    [param: Required(ErrorMessage = "Họ tên là bắt buộc"), StringLength(100, ErrorMessage = "Họ tên tối đa 100 ký tự")] string FullName,
+    [param: Phone(ErrorMessage = "Số điện thoại sai định dạng")] string? Phone);
+
 public record SetStatusRequest(bool IsActive);
 
 public interface IUserAdminService
 {
     Task<PagedResult<UserListItem>> ListAsync(UserRole? role, UserStatus? status, string? q, int page, int pageSize);
     Task<CreatedUserResponse> CreateAsync(int actorId, CreateUserRequest request);
+    Task<CreatedUserResponse> CreateMemberAsync(int actorId, CreateMemberRequest request);
     Task<UserListItem> UpdateAsync(int actorId, int id, UpdateUserRequest request);
     Task SetStatusAsync(int actorId, int id, bool isActive);
     Task VerifyEmailAsync(int actorId, int id);
@@ -57,7 +63,7 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
         if (await users.EmailExistsAsync(email))
             throw new AuthException("Email đã tồn tại");
 
-        var tempPassword = "Sc1-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(4));
+        var tempPassword = NewTempPassword();
         var user = new User
         {
             Email = email,
@@ -79,6 +85,35 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
 
         return new CreatedUserResponse(ToItem(user), tempPassword);
     }
+
+    // Front-desk sign-up: staff checked the member in person, so the email gate is skipped like staff accounts.
+    public async Task<CreatedUserResponse> CreateMemberAsync(int actorId, CreateMemberRequest r)
+    {
+        var email = r.Email.Trim().ToLowerInvariant();
+        if (await users.EmailExistsAsync(email))
+            throw new AuthException("Email đã tồn tại");
+
+        var tempPassword = NewTempPassword();
+        var user = new User
+        {
+            Email = email,
+            FullName = r.FullName.Trim(),
+            Phone = string.IsNullOrWhiteSpace(r.Phone) ? null : r.Phone.Trim(),
+            Role = UserRole.Member,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
+            MustChangePassword = true,
+            EmailVerified = true,
+        };
+
+        await users.AddAsync(user);
+        await users.SaveChangesAsync();
+        Audit(actorId, "Member.CreateAtCounter", user.Id, new { user.Email });
+        await users.SaveChangesAsync();
+
+        return new CreatedUserResponse(ToItem(user), tempPassword);
+    }
+
+    private static string NewTempPassword() => "Sc1-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(4));
 
     public async Task<UserListItem> UpdateAsync(int actorId, int id, UpdateUserRequest r)
     {

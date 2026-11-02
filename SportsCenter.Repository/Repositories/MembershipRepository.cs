@@ -49,6 +49,22 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .ToDictionaryAsync(x => x.SubscriptionId, x => x.Status, ct);
     }
 
+    public Task<MemberSubscription?> FindOwnedSubscriptionAsync(int memberId, int subscriptionId, CancellationToken ct) =>
+        db.MemberSubscriptions.Include(x => x.Plan)
+            .SingleOrDefaultAsync(x => x.Id == subscriptionId && x.MemberId == memberId, ct);
+
+    public Task<SubscriptionCancellationBlockers> GetCancellationBlockersAsync(int subscriptionId, DateOnly today,
+        TimeOnly localTime, CancellationToken ct) =>
+        db.MemberSubscriptions.Where(x => x.Id == subscriptionId).Select(x => new SubscriptionCancellationBlockers(
+            db.CheckIns.Any(v => v.SubscriptionId == x.Id && v.CheckedOutAt == null),
+            db.ClassBookings.Count(b => b.SubscriptionId == x.Id && b.Status == BookingStatus.Confirmed &&
+                b.Session.Status == SessionStatus.Scheduled &&
+                (b.Session.Date > today || b.Session.Date == today && b.Session.EndTime > localTime)),
+            db.PtBookings.Count(b => b.SubscriptionId == x.Id && b.Status == BookingStatus.Confirmed &&
+                (b.Date > today || b.Date == today && b.EndTime > localTime)),
+            db.Payments.Any(p => p.SubscriptionId == x.Id && p.Status == PaymentStatus.Pending)))
+            .SingleAsync(ct);
+
     public Task<Payment?> GetPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription!).ThenInclude(x => x.Plan).FirstOrDefaultAsync(x => x.MemberId == memberId && x.Status == PaymentStatus.Pending && x.Subscription != null && x.Subscription.PlanId == planId, ct);
 
@@ -117,6 +133,33 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .GroupBy(_ => 1).Select(g => new { Total = g.Sum(x => x.PaidAmount - x.RefundedAmount), Count = g.Count() }).FirstOrDefaultAsync(ct);
         return new RevenueReportData((revenue?.Total ?? 0) + (orders?.Total ?? 0), (revenue?.Count ?? 0) + (orders?.Count ?? 0), newMembers, newSubscriptions,
             activeSubscriptions, expiredSubscriptions, newClassBookings);
+    }
+
+    public async Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
+        string search, int page, int pageSize, CancellationToken ct)
+    {
+        // Wallet funding is cash-in, not service revenue. Never include pending/failed payments or refunds.
+        var receipts = db.Payments.AsNoTracking().Where(p => p.Purpose == PaymentPurpose.WalletTopUp
+            && p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            var memberId = int.TryParse(term, out var id) ? id : 0;
+            receipts = receipts.Where(p => p.MemberId == memberId || (p.InvoiceNumber != null && p.InvoiceNumber.ToLower().Contains(term))
+                || p.Member.FullName.ToLower().Contains(term) || p.Member.Email.ToLower().Contains(term)
+                || (p.ReceivedBy != null && p.ReceivedBy.FullName.ToLower().Contains(term)));
+        }
+        var summary = await receipts.GroupBy(_ => 1).Select(g => new
+        {
+            Total = g.Count(), Amount = g.Sum(p => p.Amount),
+            Cash = g.Sum(p => p.Method == PaymentMethod.Cash ? p.Amount : 0),
+            Bank = g.Sum(p => p.Method == PaymentMethod.BankTransfer ? p.Amount : 0),
+        }).FirstOrDefaultAsync(ct);
+        var items = await receipts.OrderByDescending(p => p.PaidAt).ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(p => new WalletReceiptRow(p.Id, p.InvoiceNumber, p.MemberId, p.Member.FullName,
+                p.ReceivedById, p.ReceivedBy != null ? p.ReceivedBy.FullName : null, p.Amount, p.Method, p.PaidAt)).ToListAsync(ct);
+        return new(items, summary?.Total ?? 0, summary?.Amount ?? 0, summary?.Cash ?? 0, summary?.Bank ?? 0);
     }
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

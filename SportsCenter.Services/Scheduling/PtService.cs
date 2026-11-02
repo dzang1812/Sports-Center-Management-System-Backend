@@ -27,6 +27,8 @@ public interface IPtService
 {
     Task<List<AvailabilityItem>> GetAvailabilityAsync(int coachId, CancellationToken ct);
     Task<List<AvailabilityItem>> ReplaceAvailabilityAsync(int actorId, ReplaceAvailabilityRequest request, CancellationToken ct);
+    Task<WeekAvailabilityResponse> GetWeekAvailabilityAsync(int coachId, DateOnly weekStart, CancellationToken ct);
+    Task<WeekAvailabilityResponse> ReplaceWeekAvailabilityAsync(int actorId, ReplaceWeekAvailabilityRequest request, CancellationToken ct);
     Task<List<PtCoachDto>> ListCoachesAsync(int? sportId, CancellationToken ct);
     Task<List<PtSlotDto>> ListSlotsAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<PtBookingDto> BookAsync(int actorId, CreatePtBookingRequest request, CancellationToken ct, string? idempotencyKey = null);
@@ -67,39 +69,13 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             x.RoomId, x.Room?.Name, x.Status)).ToList(), total, page, pageSize);
     }
 
+    // Compatibility reads show only this week. Recurring writers must upgrade.
     public async Task<List<AvailabilityItem>> GetAvailabilityAsync(int coachId, CancellationToken ct) =>
-        (await pt.GetActiveAvailabilityAsync(coachId, ct))
-        .Select(x => new AvailabilityItem(x.Id, x.SportId, x.Sport.Name, x.DayOfWeek, x.StartTime, x.EndTime)).ToList();
+        (await GetWeekAvailabilityAsync(coachId, WeekStart(DateOnly.FromDateTime(clock.LocalNow)), ct)).Items
+            .Select(x => new AvailabilityItem(x.Id, x.SportId, x.Sport, x.Date.DayOfWeek, x.StartTime, x.EndTime)).ToList();
 
-    public async Task<List<AvailabilityItem>> ReplaceAvailabilityAsync(int actorId, ReplaceAvailabilityRequest request, CancellationToken ct)
-    {
-        ValidateAvailability(request.Items);
-        return await transaction.ExecuteAsync(async token =>
-        {
-            await EnsureCoachAsync(actorId, null, token);
-            var sportIds = request.Items.Select(x => x.SportId).Distinct().ToList();
-            await transaction.LockAsync(sportIds.Select(x => new ScheduleResourceLock(ScheduleResourceType.Sport, x))
-                .Append(new ScheduleResourceLock(ScheduleResourceType.Coach, actorId)), token);
-            var coachSports = await users.GetPtSportIdsAsync(actorId, sportIds, token);
-            if (coachSports.Count != sportIds.Count) throw SchedulingException.Conflict("COACH_NOT_ELIGIBLE", "Có bộ môn PT không thuộc chuyên môn của huấn luyện viên.");
-            var today = timeRules.EnforceTimeRules ? DateOnly.FromDateTime(clock.LocalNow) : DateOnly.MinValue;
-            var future = await pt.GetFutureConfirmedBookingsAsync(actorId, today, token);
-            if (timeRules.EnforceTimeRules)
-                future = future.Where(x => clock.ToUtc(x.Date, x.EndTime) > clock.UtcNow).ToList();
-            var invalid = future.Where(x => !request.Items.Any(a => a.SportId == x.SportId && a.DayOfWeek == x.Date.DayOfWeek && a.StartTime <= x.StartTime && a.EndTime >= x.EndTime)).ToList();
-            if (invalid.Count != 0) throw SchedulingException.Conflict("AVAILABILITY_HAS_BOOKINGS", "Khung mới không bao phủ booking PT tương lai.", invalid.Select(x => x.Id));
-            var current = await pt.GetActiveAvailabilityForUpdateAsync(actorId, token);
-            foreach (var item in current) item.IsActive = false;
-            pt.AddAvailabilities(request.Items.Select(x => new CoachAvailability
-            {
-                CoachId = actorId, SportId = x.SportId, DayOfWeek = x.DayOfWeek, StartTime = x.StartTime, EndTime = x.EndTime,
-                CreatedAt = clock.UtcNow,
-            }));
-            audit.AddAudit(actorId, "CoachAvailability.Replace", nameof(CoachAvailability), actorId, request);
-            await transaction.SaveChangesAsync(token);
-            return await GetAvailabilityAsync(actorId, token);
-        }, ct);
-    }
+    public Task<List<AvailabilityItem>> ReplaceAvailabilityAsync(int actorId, ReplaceAvailabilityRequest request, CancellationToken ct) =>
+        throw new SchedulingException("AVAILABILITY_WEEK_REQUIRED", "Vui lòng tải lại giao diện và chọn tuần để lưu giờ rảnh.");
 
     public async Task<List<PtCoachDto>> ListCoachesAsync(int? sportId, CancellationToken ct)
     {
@@ -111,14 +87,14 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
 
     public async Task<List<PtSlotDto>> ListSlotsAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct)
     {
-        if (to < from || to.DayNumber - from.DayNumber > 31) throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng tìm slot tối đa 31 ngày.");
+        if (from == DateOnly.MinValue || to == DateOnly.MaxValue || to < from || to.DayNumber - from.DayNumber > 31) throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng tìm slot tối đa 31 ngày.");
         await EnsureCoachAsync(coachId, sportId, ct);
-        var availability = await pt.GetActiveAvailabilityForSportAsync(coachId, sportId, ct);
+        var availability = await pt.GetActiveAvailabilityForSportAsync(coachId, sportId, from, to, ct);
         var classBusy = await pt.GetCoachClassBusyAsync(coachId, from, to, ct);
         var ptBusy = await pt.GetCoachPtBusyAsync(coachId, from, to, ct);
         var slots = new List<PtSlotDto>();
         for (var date = from; date <= to; date = date.AddDays(1))
-        foreach (var range in availability.Where(x => x.DayOfWeek == date.DayOfWeek))
+        foreach (var range in availability.Where(x => x.Date == date))
         for (var start = range.StartTime; start < range.EndTime && start.AddHours(1) > start && start.AddHours(1) <= range.EndTime; start = start.AddHours(1))
         {
             var end = start.AddHours(1);
@@ -374,18 +350,6 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
     {
         if (!await users.IsPtCoachAsync(coachId, sportId, ct))
             throw SchedulingException.Conflict("COACH_NOT_ELIGIBLE", "Huấn luyện viên không hoạt động hoặc không đúng chuyên môn PT.");
-    }
-
-    private static void ValidateAvailability(List<AvailabilityRange> items)
-    {
-        if (items.Count > 50) throw new SchedulingException("AVAILABILITY_LIMIT", "Tối đa 50 khung availability.");
-        foreach (var x in items)
-            if (!Enum.IsDefined(x.DayOfWeek) || x.StartTime >= x.EndTime || x.StartTime.Minute != 0 || x.EndTime.Minute != 0 || x.StartTime.Second != 0 || x.EndTime.Second != 0 || (x.EndTime - x.StartTime).TotalMinutes % 60 != 0)
-                throw new SchedulingException("INVALID_AVAILABILITY", "Availability phải thẳng giờ, kết thúc sau bắt đầu và chia hết thành slot 60 phút.");
-        for (var i = 0; i < items.Count; i++)
-        for (var j = i + 1; j < items.Count; j++)
-            if (items[i].DayOfWeek == items[j].DayOfWeek && items[i].StartTime < items[j].EndTime && items[j].StartTime < items[i].EndTime)
-                throw new SchedulingException("AVAILABILITY_OVERLAP", "Các khung availability không được trùng nhau.");
     }
 
     private async Task<int> ResolveTargetMemberAsync(int actorId, int? requested, CancellationToken ct)

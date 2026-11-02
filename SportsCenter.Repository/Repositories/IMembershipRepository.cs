@@ -5,6 +5,11 @@ namespace SportsCenter.Repository.Repositories;
 public record RevenueReportData(decimal TotalRevenue, int PaymentCount, int NewMembers, int NewSubscriptions,
     int ActiveSubscriptions, int ExpiredSubscriptions, int NewClassBookings);
 public record PaymentKey(int MemberId);
+public record SubscriptionCancellationBlockers(bool HasOpenGymVisit, int UpcomingClassBookings, int UpcomingPtBookings,
+    bool HasPendingPayment);
+public record WalletReceiptRow(int PaymentId, string? InvoiceNumber, int MemberId, string MemberName,
+    int? ReceivedById, string? ReceivedByName, decimal Amount, PaymentMethod Method, DateTime PaidAt);
+public record WalletReceiptReportData(List<WalletReceiptRow> Items, int Total, decimal TotalAmount, decimal CashAmount, decimal BankTransferAmount);
 
 public interface IMembershipRepository
 {
@@ -18,6 +23,9 @@ public interface IMembershipRepository
 
     Task<MemberSubscription?> GetLatestSubscriptionAsync(int memberId, int planId, CancellationToken ct);
     Task<List<MemberSubscription>> ListSubscriptionsAsync(int memberId, CancellationToken ct);
+    Task<MemberSubscription?> FindOwnedSubscriptionAsync(int memberId, int subscriptionId, CancellationToken ct);
+    Task<SubscriptionCancellationBlockers> GetCancellationBlockersAsync(int subscriptionId, DateOnly today,
+        TimeOnly localTime, CancellationToken ct);
     Task<Dictionary<int, PaymentStatus>> GetLatestPaymentStatusesAsync(IReadOnlyCollection<int> subscriptionIds,
         CancellationToken ct);
     Task<bool> HasPendingSubscriptionPaymentAsync(int memberId, int planId, CancellationToken ct);
@@ -35,6 +43,8 @@ public interface IMembershipRepository
 
     Task<RevenueReportData> GetRevenueReportAsync(DateOnly from, DateOnly to, DateTime fromUtc, DateTime toUtcExclusive,
         DateOnly today, CancellationToken ct);
+    Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
+        string search, int page, int pageSize, CancellationToken ct);
 
     Task SaveChangesAsync(CancellationToken ct);
 }

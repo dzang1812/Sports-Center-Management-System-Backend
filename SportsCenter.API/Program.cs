@@ -80,6 +80,8 @@ builder.Services.Configure<MailOptions>(builder.Configuration.GetSection(MailOpt
 builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(c => c.BaseAddress = new Uri("https://api.resend.com/"));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMeService, MeService>();
+builder.Services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
+builder.Services.AddScoped<CoachProfileService>();
 builder.Services.AddScoped<IUserAdminService, UserAdminService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddSingleton<IAppClock, VietnamClock>();
@@ -92,9 +94,12 @@ builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
 builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<IPtRepository, PtRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+builder.Services.AddScoped<ICoachTeachingRepository, CoachTeachingRepository>();
+builder.Services.AddScoped<CoachTeachingService>();
 builder.Services.AddScoped<ICommerceRepository, CommerceRepository>();
 builder.Services.AddScoped<WalletService>();
 builder.Services.AddScoped<Flow2CommerceService>();
+builder.Services.AddScoped<MembershipWalletPurchaseService>();
 builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddScoped<IClassScheduleService, ClassScheduleService>();
 builder.Services.AddScoped<IClassBookingService, ClassBookingService>();
@@ -113,12 +118,35 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
 builder.Services.AddScoped<IGymAccessRepository, GymAccessRepository>();
 builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
+builder.Services.AddScoped<SubscriptionCancellationService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IGymAccessService, GymAccessService>();
 builder.Services.AddScoped<IMembershipReportService, MembershipReportService>();
+builder.Services.AddScoped<IFrontDeskRepository, FrontDeskRepository>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.SupportService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.PaymentHistoryService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.ReportTrendService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.CoachMessageService>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.SubscriptionExpiryNotifier>();
+builder.Services.AddScoped<SportsCenter.Services.Operations.ExpiringSubscriptionService>();
+builder.Services.AddHostedService<SubscriptionExpiryWorker>();
 
 builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
 builder.Services.AddScoped<ITrainingService, TrainingService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IExerciseGuideService, ExerciseGuideService>(c => c.Timeout = TimeSpan.FromSeconds(15))
+    .RedactLoggedHeaders(["X-WorkoutX-Key"]);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("exercise-guides", context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+        { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+    options.OnRejected = async (context, ct) => await context.HttpContext.Response.WriteAsJsonAsync(
+        new { message = "Bạn xem hướng dẫn quá nhanh. Vui lòng thử lại sau một phút." }, cancellationToken: ct);
+});
+builder.Services.AddScoped<ICoachTrainingService, CoachTrainingService>();
 builder.Services.AddScoped<IAiRepository, AiRepository>();
 builder.Services.AddScoped<IAiUsageService, AiUsageService>();
 builder.Services.AddScoped<IWorkoutEvaluationService, WorkoutEvaluationService>();
@@ -184,6 +212,7 @@ app.UseMiddleware<SchedulingExceptionMiddleware>();
 app.UseCors("Default");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
 

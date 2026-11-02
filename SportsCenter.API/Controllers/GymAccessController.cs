@@ -28,6 +28,14 @@ public sealed class GymAccessController(IGymAccessService service) : ControllerB
     public Task<GymCardDto> Lookup(string cardCode, CancellationToken ct) =>
         service.LookupCardAsync(ActorId, cardCode, ct);
 
+    // Name, email, phone or (partial) card code; min 2 chars, top 10.
+    [HttpGet("members")]
+    public Task<List<SportsCenter.Repository.Repositories.GymMemberSearchRow>> Search(string? q, CancellationToken ct) =>
+        service.SearchMembersAsync(ActorId, q, ct);
+
+    [HttpGet("members/{memberId:int}/card")]
+    public Task<GymCardDto> MemberCard(int memberId, CancellationToken ct) => service.GetMemberCardAsync(ActorId, memberId, ct);
+
     [HttpPost("check-ins")]
     public Task<GymScanResult> CheckIn(GymScanRequest request, CancellationToken ct) =>
         service.CheckInAsync(ActorId, request, ct);

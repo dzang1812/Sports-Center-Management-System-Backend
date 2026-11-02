@@ -53,6 +53,8 @@ public interface IGymAccessService
 {
     Task<GymCardDto> GetMyCardAsync(int memberId, CancellationToken ct);
     Task<GymCardDto> LookupCardAsync(int actorId, string cardCode, CancellationToken ct);
+    Task<List<GymMemberSearchRow>> SearchMembersAsync(int actorId, string? q, CancellationToken ct);
+    Task<GymCardDto> GetMemberCardAsync(int actorId, int memberId, CancellationToken ct);
     Task<GymScanResult> CheckInAsync(int actorId, GymScanRequest request, CancellationToken ct);
     Task<GymScanResult> CheckOutAsync(int actorId, GymScanRequest request, CancellationToken ct);
     Task<GymVisitHistoryResponse> ListVisitsAsync(
@@ -66,11 +68,27 @@ public sealed class GymAccessService(
     ISchedulingTransaction transaction,
     IAppClock clock) : IGymAccessService
 {
-    public Task<GymCardDto> GetMyCardAsync(int memberId, CancellationToken ct) =>
+    public Task<GymCardDto> GetMyCardAsync(int memberId, CancellationToken ct) => EnsureCardAsync(memberId, requireActive: true, ct);
+
+    public async Task<List<GymMemberSearchRow>> SearchMembersAsync(int actorId, string? q, CancellationToken ct)
+    {
+        await EnsureReceptionistAsync(actorId);
+        var term = q?.Trim();
+        return string.IsNullOrEmpty(term) || term.Length < 2 ? [] : await gym.SearchMembersAsync(term, 10, ct);
+    }
+
+    // Issues the card on first use, same as the member opening it, so the desk can check in members who never did.
+    public async Task<GymCardDto> GetMemberCardAsync(int actorId, int memberId, CancellationToken ct)
+    {
+        await EnsureReceptionistAsync(actorId);
+        return await EnsureCardAsync(memberId, requireActive: false, ct);
+    }
+
+    private Task<GymCardDto> EnsureCardAsync(int memberId, bool requireActive, CancellationToken ct) =>
         transaction.ExecuteAsync(async token =>
         {
             await transaction.LockAsync([new(ScheduleResourceType.Member, memberId)], token);
-            var member = await RequireMemberAsync(memberId, requireActive: true, token);
+            var member = await RequireMemberAsync(memberId, requireActive, token);
             if (member.MemberProfile is null)
             {
                 member.MemberProfile = new MemberProfile { UserId = member.Id };

@@ -152,16 +152,17 @@ public class AiRepository(AppDbContext db) : IAiRepository
     public Task<TrainingPlan?> GetActivePlanAsync(int memberId, CancellationToken ct) =>
         db.TrainingPlans.AsNoTracking().AsSplitQuery()
             .Include(x => x.Sessions).Include(x => x.Items).ThenInclude(i => i.Exercise)
-            .Where(x => x.MemberId == memberId && x.IsActive)
+            .Where(x => x.MemberId == memberId && x.CoachId == null && x.IsActive)
             .OrderByDescending(x => x.Id).FirstOrDefaultAsync(ct);
 
+    // Coach-made plans are off limits to the member's AI: it only reads/edits self-service plans.
     public Task<TrainingPlan?> GetOwnedPlanAsync(int memberId, int planId, CancellationToken ct) =>
         db.TrainingPlans.AsSplitQuery()
             .Include(x => x.Sessions).Include(x => x.Items)
-            .FirstOrDefaultAsync(x => x.Id == planId && x.MemberId == memberId, ct);
+            .FirstOrDefaultAsync(x => x.Id == planId && x.MemberId == memberId && x.CoachId == null, ct);
 
     public Task DeactivatePlansAsync(int memberId, CancellationToken ct) =>
-        db.TrainingPlans.Where(x => x.MemberId == memberId && x.IsActive)
+        db.TrainingPlans.Where(x => x.MemberId == memberId && x.CoachId == null && x.IsActive)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
 
     public void AddPlan(TrainingPlan plan) => db.TrainingPlans.Add(plan);

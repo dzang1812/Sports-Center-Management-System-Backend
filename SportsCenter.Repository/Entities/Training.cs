@@ -76,8 +76,10 @@ public class TrainingResult // what the member actually did, recorded by the coa
     public User Member { get; set; } = null!;
     public int RecordedById { get; set; }
     public User RecordedBy { get; set; } = null!;
-    public int? SessionId { get; set; }
+    public int? SessionId { get; set; } // class session, or
     public ClassSession? Session { get; set; }
+    public int? PtBookingId { get; set; } // PT session
+    public PtBooking? PtBooking { get; set; }
     public int? ExerciseId { get; set; }
     public Exercise? Exercise { get; set; }
     public int? Sets { get; set; }

@@ -7,6 +7,8 @@ namespace SportsCenter.Services.Membership;
 
 public record PlanSportDto(int Id, string Name);
 
+public record ChangePlanStatusRequest([param: Required] bool? IsActive);
+
 public record PlanDto(int Id, string Name, string? Description, int DurationDays, decimal Price, bool IsActive,
     int? SportId, bool IncludesClasses, int PtSessionCredits, bool IncludesGymAccess, int DurationMonths,
     string PlanType, string? SportName, IReadOnlyList<PlanSportDto> AllowedSports, string? ImageUrl, bool WalletPtPackage);
@@ -30,6 +32,7 @@ public interface IMembershipPlanService
     Task<PlanDto> GetAsync(int id, bool includeInactive, CancellationToken ct);
     Task<PlanDto> CreateAsync(int actorId, UpsertPlanRequest request, CancellationToken ct);
     Task<PlanDto> UpdateAsync(int actorId, int id, UpsertPlanRequest request, CancellationToken ct);
+    Task<PlanDto> SetActiveAsync(int actorId, int id, bool isActive, CancellationToken ct);
 }
 
 public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepository users,
@@ -95,6 +98,36 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
             Apply(plan, request, name);
             var action = wasActive && !plan.IsActive ? "MembershipPlan.Deactivate" : "MembershipPlan.Update";
             await repo.AddAuditAsync(actorId, action, nameof(MembershipPlan), id, request, token);
+            return MembershipPlanPresentation.ToDto(plan, sports);
+        }, ct);
+    }
+
+    public async Task<PlanDto> SetActiveAsync(int actorId, int id, bool isActive, CancellationToken ct)
+    {
+        var actor = await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
+        if (!actor.IsActive)
+            throw SchedulingException.Forbidden("ACTOR_NOT_ALLOWED", "Tài khoản không hợp lệ hoặc không có quyền.");
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([
+                new(ScheduleResourceType.MembershipPlan, 0), new(ScheduleResourceType.MembershipPlan, id),
+            ], token);
+            var plan = await repo.GetPlanAsync(id, token)
+                ?? throw SchedulingException.NotFound("PLAN_NOT_FOUND", "Không tìm thấy gói thành viên.");
+            if (plan.IsActive == isActive)
+                return MembershipPlanPresentation.ToDto(plan, await repo.ListSportsAsync(token));
+
+            // Old packages may have invalid/missing benefits. They must still be removable from sale.
+            // Reopening validates the saved package without changing any purchased entitlements.
+            var sports = isActive
+                ? await ValidateRequestAsync(new(plan.Name, plan.Description, plan.DurationDays, plan.Price,
+                    true, plan.SportId, plan.IncludesClasses, plan.PtSessionCredits, plan.IncludesGymAccess,
+                    plan.DurationMonths, plan.ImageUrl), plan, token)
+                : await repo.ListSportsAsync(token);
+            var wasActive = plan.IsActive;
+            plan.IsActive = isActive;
+            await repo.AddAuditAsync(actorId, isActive ? "MembershipPlan.Activate" : "MembershipPlan.Deactivate",
+                nameof(MembershipPlan), id, new { WasActive = wasActive, IsActive = isActive }, token);
             return MembershipPlanPresentation.ToDto(plan, sports);
         }, ct);
     }
