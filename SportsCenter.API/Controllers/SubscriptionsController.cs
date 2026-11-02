@@ -23,3 +23,16 @@ public sealed class MemberSubscriptionsController(ISubscriptionService service) 
     [HttpGet("api/members/{memberId:int}/subscriptions"), Authorize(Roles = "Receptionist,Manager")]
     public Task<List<SubscriptionDto>> ForMember(int memberId, CancellationToken ct) => service.ListForMemberAsync(ActorId, memberId, ct);
 }
+
+[ApiController, Authorize(Roles = "Member"), Route("api/me/subscriptions")]
+public sealed class MemberSubscriptionCancellationController(SubscriptionCancellationService service) : ControllerBase
+{
+    private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    [HttpGet("{id:int}/cancellation")]
+    public Task<SubscriptionCancellationPreview> Preview(int id, CancellationToken ct) => service.PreviewAsync(ActorId, id, ct);
+
+    [HttpPost("{id:int}/cancel")]
+    public Task<SubscriptionCancellationResult> Cancel(int id, CancelSubscriptionRequest request, CancellationToken ct) =>
+        service.CancelAsync(ActorId, id, request, ct);
+}
