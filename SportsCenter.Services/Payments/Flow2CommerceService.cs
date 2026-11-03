@@ -197,8 +197,11 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             var c = await LockCourseAsync(snapshot.ClassId, [snapshot.MemberId], token);
             var enrollment = await repo.GetEnrollmentAsync(enrollmentId, token);
             if (enrollment.Status == EnrollmentStatus.Cancelled) return enrollmentId;
-            // The original cutoff never moves later once elapsed; conservative cancellation boundary.
-            CommercePolicy.RequireBefore(clock.UtcNow, c.CourseStartsAt!.Value);
+            // Cancellation is bounded by the first lesson, not the enrollment deadline.
+            if (c.CourseStartsAt is not { } startsAt)
+                throw SchedulingException.Conflict("COURSE_START_UNKNOWN", "Chưa xác định được giờ khai giảng để kiểm tra hủy khóa. Vui lòng liên hệ hỗ trợ.");
+            if (clock.UtcNow >= startsAt)
+                throw SchedulingException.Conflict("COURSE_ALREADY_STARTED", "Khóa đã khai giảng nên không thể tự hủy và hoàn tiền. Vui lòng liên hệ hỗ trợ để trung tâm xử lý.");
             if (await repo.EnrollmentHasAttendanceAsync(enrollmentId, token))
                 throw SchedulingException.Conflict("ENROLLMENT_ATTENDANCE_RECORDED", "Enrollment đã ghi nhận tham dự; cần hỗ trợ.");
             var units = await repo.ListUnrefundedOrderUnitsAsync(enrollment.OrderId, token);

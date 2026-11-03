@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
@@ -50,7 +51,7 @@ public interface IScheduleAttendanceService
 
 public sealed class ScheduleAttendanceService(IAttendanceRepository attendances, IScheduleUserRepository users,
     ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, ISchedulingTransaction transaction, IAppClock clock,
-    IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options) : IScheduleAttendanceService
+    IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options, IConfiguration configuration) : IScheduleAttendanceService
 {
     private readonly SchedulingOptions settings = options.Value;
     public async Task<List<PersonalScheduleItem>> GetPersonalScheduleAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct)
@@ -162,17 +163,29 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 throw SchedulingException.Forbidden("CHECK_IN_CODE_ISSUER_REQUIRED", "Vai trò không được mở mã check-in lớp.");
             ValidateCheckInWindow(session);
 
-            var code = GenerateCheckInCode();
+            // Reconstruct the active code from persisted metadata under the session lock.
+            // Reopening from any authorized screen must not invalidate the code already shared.
+            if (session.CheckInCodeIssuedAt is { } previousIssuedAt &&
+                session.CheckInCodeIssuedByUserId is { } previousIssuer &&
+                session.CheckInCodeExpiresAt is { } previousExpiry &&
+                (!timeRules.EnforceTimeRules || previousExpiry > clock.UtcNow))
+            {
+                var previousCode = GenerateCheckInCode(sessionId, previousIssuedAt, previousIssuer);
+                if (CheckInCodeMatches(session, previousCode))
+                    return CheckInCodeDto(sessionId, previousCode, previousExpiry);
+            }
+            // PostgreSQL retains microseconds, while .NET DateTime also has sub-microsecond ticks.
+            var issuedAt = new DateTime(clock.UtcNow.Ticks / 10 * 10, DateTimeKind.Utc);
+            var code = GenerateCheckInCode(sessionId, issuedAt, actorId);
             var endUtc = clock.ToUtc(session.Date, session.EndTime);
-            var expiresAt = new[] { clock.UtcNow.AddMinutes(settings.ClassCheckInCodeLifetimeMinutes), endUtc }.Min();
+            var expiresAt = new[] { issuedAt.AddMinutes(settings.ClassCheckInCodeLifetimeMinutes), endUtc }.Min();
             session.CheckInCodeHash = HashCode(code);
-            session.CheckInCodeIssuedAt = clock.UtcNow;
+            session.CheckInCodeIssuedAt = issuedAt;
             session.CheckInCodeExpiresAt = expiresAt;
             session.CheckInCodeIssuedByUserId = actorId;
             audit.AddAudit(actorId, "ClassSession.CheckInCodeIssued", nameof(ClassSession), sessionId,
                 new { ExpiresAt = expiresAt });
-            return new ClassCheckInCodeDto(sessionId, code, expiresAt,
-                JsonSerializer.Serialize(new { type = "ClassSessionCheckIn", sessionId, code }));
+            return CheckInCodeDto(sessionId, code, expiresAt);
         }, ct);
 
     public async Task<ClassSelfCheckInResult> MemberCheckInAsync(
@@ -321,9 +334,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_REQUIRED", "Buổi học chưa có mã check-in đang hoạt động.");
         if (timeRules.EnforceTimeRules && session.CheckInCodeExpiresAt <= clock.UtcNow)
             throw SchedulingException.Conflict("CLASS_CHECK_IN_CODE_EXPIRED", "Mã check-in đã hết hạn.");
-        if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(session.CheckInCodeHash), Convert.FromHexString(HashCode(rawCode))))
-            throw new SchedulingException("CLASS_CHECK_IN_CODE_INVALID", "Mã check-in không hợp lệ.");
+        if (!CheckInCodeMatches(session, rawCode))
+            throw new SchedulingException("CLASS_CHECK_IN_CODE_INVALID", "Mã không khớp buổi học này hoặc đã được thay mới. Vui lòng lấy mã hiện tại của đúng buổi từ HLV/lễ tân.");
     }
 
     private AttendanceStatus ResolveCheckInStatus(ClassSession session) =>
@@ -335,11 +347,25 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         AttendanceStatus status, DateTime checkedInAt, bool alreadyCheckedIn) =>
         new(actorType, sessionId, userId, status, checkedInAt, alreadyCheckedIn);
 
-    private static string GenerateCheckInCode()
+    private string GenerateCheckInCode(int sessionId, DateTime issuedAt, int issuerId)
     {
+        // Domain-separated HMAC: only a server with the secret can recover the short code.
+        // Keep the existing hash-only storage; no plaintext code, new column, or migration.
+        var secret = configuration["Scheduling:ClassCheckInCodeKey"] ?? configuration["Jwt:Key"];
+        if (string.IsNullOrWhiteSpace(secret))
+            throw new SchedulingException("CHECK_IN_CONFIGURATION_MISSING", "Chưa cấu hình mã check-in trên Backend. Vui lòng liên hệ quản lý.", 503);
+        var payload = FormattableString.Invariant($"sportscenter:class-check-in:v1:{sessionId}:{issuedAt.Ticks}:{issuerId}");
+        var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(payload));
         const string alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-        return string.Concat(Enumerable.Range(0, 8).Select(_ => alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)]));
+        return string.Concat(bytes.Take(8).Select(value => alphabet[value & 31]));
     }
+
+    private static bool CheckInCodeMatches(ClassSession session, string code) =>
+        session.CheckInCodeHash is { } hash && CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(hash), Encoding.UTF8.GetBytes(HashCode(code)));
+
+    private static ClassCheckInCodeDto CheckInCodeDto(int sessionId, string code, DateTime expiresAt) =>
+        new(sessionId, code, expiresAt, JsonSerializer.Serialize(new { type = "ClassSessionCheckIn", sessionId, code }));
 
     private static string HashCode(string code) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
