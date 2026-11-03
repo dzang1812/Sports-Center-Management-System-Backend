@@ -12,6 +12,7 @@ namespace SportsCenter.Services.Ai;
 public interface IAiService
 {
     Task<ChatResponseDto> ChatAsync(int userId, string message, CancellationToken ct = default);
+    Task<string> PublicChatAsync(PublicChatRequestDto request, CancellationToken ct = default);
     Task<ChatResponseDto> GenerateWorkoutPlanAsync(int userId, GenerateWorkoutPlanRequestDto request, CancellationToken ct = default);
     Task ApplySuggestionsAsync(int userId, ApplySuggestionsRequestDto dto, CancellationToken ct = default);
     Task<ImageAnalyzeResponseDto> AnalyzeImageAsync(int userId, Stream image, string contentType, string mode, CancellationToken ct = default);
@@ -24,6 +25,7 @@ public partial class AiService(
 {
     private const string TextModel = "gpt-4o-mini";
     private const string VisionModel = "gpt-4.1-mini";
+    private const int AnonymousUserId = 0; // visitors who are not logged in
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -51,9 +53,12 @@ public partial class AiService(
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
         if (root.TryGetProperty("usage", out var u))
-            await usage.RecordCostAsync(userId, feature, model,
-                u.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0,
-                u.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0, ct);
+        {
+            var promptTokens = u.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0;
+            var completionTokens = u.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0;
+            if (userId == AnonymousUserId) await usage.RecordAnonymousCostAsync(model, promptTokens, completionTokens, ct);
+            else await usage.RecordCostAsync(userId, feature, model, promptTokens, completionTokens, ct);
+        }
 
         return root.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
     }
