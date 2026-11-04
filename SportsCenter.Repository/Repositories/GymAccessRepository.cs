@@ -40,12 +40,14 @@ public sealed class GymAccessRepository(AppDbContext db) : IGymAccessRepository
     public Task<List<GymMemberSearchRow>> SearchMembersAsync(string term, int limit, CancellationToken ct)
     {
         var like = $"%{term}%";
+        int? asId = int.TryParse(term.TrimStart('#'), out var id) ? id : null; // "#12" or "12" = member id
         return db.Users.AsNoTracking()
-            .Where(x => x.Role == UserRole.Member && (EF.Functions.ILike(EF.Functions.Unaccent(x.FullName), EF.Functions.Unaccent(like)) ||
+            .Where(x => x.Role == UserRole.Member && ((asId != null && x.Id == asId) ||
+                EF.Functions.ILike(EF.Functions.Unaccent(x.FullName), EF.Functions.Unaccent(like)) ||
                 EF.Functions.ILike(x.Email, like) ||
                 (x.Phone != null && EF.Functions.ILike(x.Phone, like)) ||
                 (x.MemberProfile != null && x.MemberProfile.GymCardCode != null && EF.Functions.ILike(x.MemberProfile.GymCardCode, like))))
-            .OrderBy(x => x.FullName).ThenBy(x => x.Id).Take(limit)
+            .OrderBy(x => x.Id == asId ? 0 : 1).ThenBy(x => x.FullName).ThenBy(x => x.Id).Take(limit)
             .Select(x => new GymMemberSearchRow(x.Id, x.FullName, x.Phone, x.Email,
                 x.MemberProfile != null ? x.MemberProfile.GymCardCode : null, x.IsActive))
             .ToListAsync(ct);

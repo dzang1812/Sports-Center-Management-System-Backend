@@ -11,16 +11,18 @@ public class UserAdminRepository(AppDbContext db) : IUserAdminRepository
         var query = db.Users.AsNoTracking().AsQueryable();
         if (role is { } r) query = query.Where(u => u.Role == r);
         if (active is { } a) query = query.Where(u => u.IsActive == a);
+        int? asId = null;
         if (!string.IsNullOrWhiteSpace(term))
         {
             term = term.Trim().ToLower();
-            var asId = int.TryParse(term, out var id) ? id : (int?)null;
+            asId = int.TryParse(term.TrimStart('#'), out var id) ? id : null; // "#12" or "12" = member id
             query = query.Where(u => u.FullName.ToLower().Contains(term) || u.Email.Contains(term) ||
                 (u.Phone != null && u.Phone.Contains(term)) || (asId != null && u.Id == asId));
         }
 
         var total = await query.CountAsync();
-        var items = await query.OrderBy(u => u.Id).Skip((page - 1) * pageSize).Take(pageSize)
+        // Exact id match first so an id lookup is never pushed off the page by phone/email partial matches.
+        var items = await query.OrderBy(u => u.Id == asId ? 0 : 1).ThenBy(u => u.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Include(u => u.CoachProfile!.Sports).ToListAsync();
         return (items, total);
     }

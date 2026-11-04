@@ -74,7 +74,9 @@ public sealed class GymAccessService(
     {
         await EnsureReceptionistAsync(actorId);
         var term = q?.Trim();
-        return string.IsNullOrEmpty(term) || term.Length < 2 ? [] : await gym.SearchMembersAsync(term, 10, ct);
+        // A member id ("7" / "#7") is searchable from one digit; free text needs 2+ characters.
+        var isId = int.TryParse(term?.TrimStart('#'), out _);
+        return string.IsNullOrEmpty(term) || (term.Length < 2 && !isId) ? [] : await gym.SearchMembersAsync(term, 10, ct);
     }
 
     // Issues the card on first use, same as the member opening it, so the desk can check in members who never did.
