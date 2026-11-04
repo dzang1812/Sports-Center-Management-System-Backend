@@ -755,6 +755,12 @@ namespace SportsCenter.Repository.Migrations
                     b.Property<int?>("ExperienceYears")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("FeaturedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("StudentAfterImageUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -773,6 +779,46 @@ namespace SportsCenter.Repository.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("CoachProfiles");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CoachReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CoachId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("CoachId", "MemberId")
+                        .IsUnique();
+
+                    b.ToTable("CoachReviews", t =>
+                        {
+                            t.HasCheckConstraint("CK_CoachReview_Rating", "\"Rating\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.CoachSessionAttendance", b =>
@@ -2262,6 +2308,25 @@ namespace SportsCenter.Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SportsCenter.Repository.Entities.CoachReview", b =>
+                {
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Coach")
+                        .WithMany()
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SportsCenter.Repository.Entities.User", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Member");
                 });
 
             modelBuilder.Entity("SportsCenter.Repository.Entities.CoachSessionAttendance", b =>

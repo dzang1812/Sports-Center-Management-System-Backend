@@ -13,6 +13,22 @@ public sealed class CoachProfilesController(CoachProfileService service) : Contr
     public Task<CoachProfileResponse> Get(int coachId, CancellationToken ct) => service.GetAsync(Actor, coachId, ct);
 }
 
+[ApiController, Route("api")]
+public sealed class CoachReviewsController(CoachReviewService service) : ControllerBase
+{
+    private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    [HttpGet("coaches/ratings"), AllowAnonymous]
+    public Task<List<CoachRatingDto>> Ratings(CancellationToken ct) => service.ListRatingsAsync(ct);
+    [HttpGet("coaches/{coachId:int}/reviews"), AllowAnonymous]
+    public Task<CoachReviewsResponse> Reviews(int coachId, CancellationToken ct) => service.ListForCoachAsync(coachId, ct);
+    [HttpGet("me/coach-reviews"), Authorize(Roles = "Member")]
+    public Task<List<ReviewableCoachDto>> Mine(CancellationToken ct) => service.ListMineAsync(Actor, ct);
+    [HttpPut("me/coach-reviews/{coachId:int}"), Authorize(Roles = "Member")]
+    public Task<ReviewableCoachDto> Upsert(int coachId, UpsertCoachReviewRequest body, CancellationToken ct) => service.UpsertAsync(Actor, coachId, body, ct);
+    [HttpPut("coaches/{coachId:int}/featured"), Authorize(Roles = "Manager,Receptionist")]
+    public Task<CoachRatingDto> Feature(int coachId, SetCoachFeaturedRequest body, CancellationToken ct) => service.SetFeaturedAsync(Actor, coachId, body.Featured, ct);
+}
+
 [ApiController, Authorize(Roles = "Coach"), Route("api/me/coach-profile")]
 public sealed class OwnCoachProfileController(CoachProfileService service) : ControllerBase
 {

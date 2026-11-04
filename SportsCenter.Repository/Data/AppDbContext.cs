@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MemberProfile> MemberProfiles => Set<MemberProfile>();
     public DbSet<EmailToken> EmailTokens => Set<EmailToken>();
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
+    public DbSet<CoachReview> CoachReviews => Set<CoachReview>();
     public DbSet<Sport> Sports => Set<Sport>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Class> Classes => Set<Class>();
@@ -100,6 +101,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<CoachProfile>().Property(p => p.StudentAfterImageUrl).HasMaxLength(2048);
         b.Entity<CoachProfile>().Property(p => p.StudentResultSummary).HasMaxLength(1000);
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
+        b.Entity<CoachReview>().HasOne(r => r.Coach).WithMany().HasForeignKey(r => r.CoachId);
+        b.Entity<CoachReview>().HasOne(r => r.Member).WithMany().HasForeignKey(r => r.MemberId);
+        b.Entity<CoachReview>().HasIndex(r => new { r.CoachId, r.MemberId }).IsUnique();
+        b.Entity<CoachReview>().Property(r => r.Comment).HasMaxLength(1000);
+        b.Entity<CoachReview>().ToTable(t => t.HasCheckConstraint("CK_CoachReview_Rating", "\"Rating\" BETWEEN 1 AND 5"));
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
         b.Entity<Sport>().HasIndex(s => s.Name).IsUnique();

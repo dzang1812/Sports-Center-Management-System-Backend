@@ -46,6 +46,23 @@ public class CoachProfile
     public string? StudentResultSummary { get; set; }
     public DateTime? StudentPhotosConsentedAt { get; set; }
     public List<Sport> Sports { get; set; } = []; // specialties; Gym/Boxing coaches can take PT
+    // Front desk / manager pick: featured coaches are listed first so new members find a good fit quickly.
+    public bool IsFeatured { get; set; }
+    public DateTime? FeaturedAt { get; set; }
+}
+
+// One rating per member per coach (editable); only members who actually trained with the coach may write one.
+public class CoachReview
+{
+    public int Id { get; set; }
+    public int CoachId { get; set; }
+    public User Coach { get; set; } = null!;
+    public int MemberId { get; set; }
+    public User Member { get; set; } = null!;
+    public int Rating { get; set; } // 1..5
+    public string? Comment { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 // One-time link token sent by email (verify address / reset password). Only the SHA-256 hash is stored.
