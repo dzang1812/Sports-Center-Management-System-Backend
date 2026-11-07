@@ -27,13 +27,12 @@ public static class EmailTemplates
     private static string Button(string link, string label) =>
         $"""<a href="{Enc(link)}" target="_blank" style="display:inline-block;background-color:#4338ca;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 48px;border-radius:8px;">{Enc(label)}</a>""";
 
-    // Mail clients run no script, so the copy icon is a visual cue: user-select:all makes one tap/click select the
+    // Mail clients run no script, so no copy button: user-select:all makes one tap/click select the
     // whole password on clients that honour it (Apple Mail, iOS); elsewhere it is select-and-copy as usual.
     private static string PasswordBox(string password) => $$"""
         <table role="presentation" cellpadding="0" cellspacing="0" style="border:2px dashed #a5b4fc;border-radius:10px;background-color:#eef2ff;">
           <tr>
             <td style="padding:14px 18px;font-family:'Courier New',Consolas,monospace;font-size:24px;font-weight:700;letter-spacing:3px;color:#1d2433;-webkit-user-select:all;user-select:all;">{{Enc(password)}}</td>
-            <td style="padding:14px 18px 14px 0;font-size:22px;line-height:1;" title="Bôi đen để sao chép">&#128203;</td>
           </tr>
         </table>
         <div style="font-size:12px;color:#8a8fa3;margin-top:8px;">Bôi đen (hoặc nhấn giữ trên điện thoại) để sao chép mật khẩu.</div>
