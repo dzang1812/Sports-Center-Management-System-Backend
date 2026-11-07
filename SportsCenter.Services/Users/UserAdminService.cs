@@ -1,9 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
 using SportsCenter.Services.Auth;
+using SportsCenter.Services.Email;
 
 namespace SportsCenter.Services.Users;
 
@@ -42,7 +45,8 @@ public interface IUserAdminService
     Task VerifyEmailAsync(int actorId, int id);
 }
 
-public class UserAdminService(IUserRepository users, IUserAdminRepository admin, IAuditLogRepository audit) : IUserAdminService
+public class UserAdminService(IUserRepository users, IUserAdminRepository admin, IAuditLogRepository audit,
+    IEmailSender mail, IOptions<MailOptions> mailOptions, ILogger<UserAdminService> log) : IUserAdminService
 {
     public async Task<PagedResult<UserListItem>> ListAsync(UserRole? role, UserStatus? status, string? q, int page, int pageSize)
     {
@@ -82,6 +86,7 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
         await users.SaveChangesAsync(); // need the id for the audit row
         Audit(actorId, "User.Create", user.Id, new { user.Email, Role = user.Role.ToString() });
         await users.SaveChangesAsync();
+        await TrySendAccountMailAsync(user, tempPassword);
 
         return new CreatedUserResponse(ToItem(user), tempPassword);
     }
@@ -109,11 +114,26 @@ public class UserAdminService(IUserRepository users, IUserAdminRepository admin,
         await users.SaveChangesAsync();
         Audit(actorId, "Member.CreateAtCounter", user.Id, new { user.Email });
         await users.SaveChangesAsync();
+        await TrySendAccountMailAsync(user, tempPassword);
 
         return new CreatedUserResponse(ToItem(user), tempPassword);
     }
 
     private static string NewTempPassword() => "Sc1-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(4));
+
+    // The account already exists and staff still see the password on screen, so a mail failure is only logged.
+    private async Task TrySendAccountMailAsync(User user, string tempPassword)
+    {
+        var role = user.Role switch { UserRole.Coach => "huấn luyện viên", UserRole.Receptionist => "lễ tân", _ => "hội viên" };
+        var loginUrl = $"{mailOptions.Value.FrontendUrl}/login";
+        try
+        {
+            await mail.SendAsync(user.Email, "Tài khoản FitZone của bạn",
+                $"Chào {user.FullName},\n\nTài khoản {role} FitZone của bạn đã được tạo.\nEmail: {user.Email}\nMật khẩu tạm: {tempPassword}\n\nĐăng nhập tại {loginUrl} và đổi mật khẩu ở lần đăng nhập đầu tiên.",
+                EmailTemplates.NewAccount(user.FullName, role, user.Email, tempPassword, loginUrl));
+        }
+        catch (Exception ex) { log.LogError(ex, "Could not send account mail to {Email}", user.Email); }
+    }
 
     public async Task<UserListItem> UpdateAsync(int actorId, int id, UpdateUserRequest r)
     {
