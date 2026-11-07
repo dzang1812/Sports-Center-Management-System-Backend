@@ -11,9 +11,10 @@ public record CoachReviewsResponse(int CoachId, double AverageRating, int Review
 public record ReviewableCoachDto(int CoachId, string FullName, string? AvatarUrl, int? MyRating, string? MyComment, DateTime? ReviewedAt);
 public record UpsertCoachReviewRequest([param: Range(1, 5)] int Rating, [param: StringLength(1000)] string? Comment);
 public record SetCoachFeaturedRequest(bool Featured);
+public record AdminCoachReviewItem(int Id, int CoachId, string CoachName, int MemberId, string MemberName, int Rating, string? Comment, DateTime CreatedAt, DateTime UpdatedAt);
 
 public sealed class CoachReviewService(ICoachReviewRepository reviews, ICoachProfileRepository profiles, IUserRepository users,
-    IAuditLogRepository audit, IAppClock clock)
+    IAuditLogRepository audit, INotificationRepository notifications, IAppClock clock)
 {
     // Public: rating + featured flag for every coach that has either, keyed by coach id on the client.
     public async Task<List<CoachRatingDto>> ListRatingsAsync(CancellationToken ct)
@@ -48,7 +49,7 @@ public sealed class CoachReviewService(ICoachReviewRepository reviews, ICoachPro
 
     public async Task<ReviewableCoachDto> UpsertAsync(int memberId, int coachId, UpsertCoachReviewRequest request, CancellationToken ct)
     {
-        await MemberAsync(memberId);
+        var member = await MemberAsync(memberId);
         if (request.Rating is < 1 or > 5) throw Invalid("Vui lòng chọn từ 1 đến 5 sao.");
         var comment = request.Comment?.Trim();
         if (string.IsNullOrEmpty(comment)) comment = null;
@@ -61,18 +62,48 @@ public sealed class CoachReviewService(ICoachReviewRepository reviews, ICoachPro
             ?? throw SchedulingException.NotFound("COACH_NOT_FOUND", "Không tìm thấy HLV đang hoạt động.");
 
         var review = await reviews.GetAsync(coachId, memberId, ct);
+        var isNew = review is null;
+        if (!isNew && review!.Rating == request.Rating && review.Comment == comment)
+            return new(coach.Id, coach.FullName, coach.AvatarUrl, review.Rating, review.Comment, review.UpdatedAt); // re-save without changes: no audit, no duplicate notification
         if (review is null) reviews.Add(review = new CoachReview { CoachId = coachId, MemberId = memberId, CreatedAt = clock.UtcNow });
         review.Rating = request.Rating; review.Comment = comment; review.UpdatedAt = clock.UtcNow;
         audit.AddAudit(memberId, "CoachReview.Upsert", nameof(CoachReview), coachId, new { request.Rating });
+        notifications.AddNotification(coachId, memberId, NotificationType.General,
+            isNew ? "Bạn nhận được đánh giá mới" : "Học viên đã cập nhật đánh giá",
+            $"{ShortName(member.FullName)} đánh giá bạn {request.Rating}/5 sao" + (comment is null ? "." : $": \"{Clip(comment, 200)}\""),
+            $"coach-review:{coachId}:{memberId}:{review.UpdatedAt.Ticks}");
         await reviews.SaveAsync(ct);
         return new(coach.Id, coach.FullName, coach.AvatarUrl, review.Rating, review.Comment, review.UpdatedAt);
     }
 
+    // Staff moderation: full member names (unlike the public list), newest first, optionally one coach.
+    public async Task<List<AdminCoachReviewItem>> ListAllAsync(int actorId, int? coachId, CancellationToken ct)
+    {
+        await StaffAsync(actorId, "COACH_REVIEW_FORBIDDEN", "Chỉ quản lý hoặc lễ tân được quản lý đánh giá HLV.");
+        return (await reviews.ListAllAsync(coachId, ct)).Select(r => new AdminCoachReviewItem(r.Id, r.CoachId, r.Coach.FullName,
+            r.MemberId, r.Member.FullName, r.Rating, r.Comment, r.CreatedAt, r.UpdatedAt)).ToList();
+    }
+
+    // Removes an inappropriate review; the member is told why and may review again.
+    public async Task DeleteAsync(int actorId, int reviewId, string? reason, CancellationToken ct)
+    {
+        await StaffAsync(actorId, "COACH_REVIEW_FORBIDDEN", "Chỉ quản lý hoặc lễ tân được quản lý đánh giá HLV.");
+        reason = reason?.Trim();
+        if (reason?.Length > 500) throw Invalid("Lý do tối đa 500 ký tự.");
+        var review = await reviews.GetByIdAsync(reviewId, ct)
+            ?? throw SchedulingException.NotFound("COACH_REVIEW_NOT_FOUND", "Không tìm thấy đánh giá.");
+        reviews.Remove(review);
+        audit.AddAudit(actorId, "CoachReview.Delete", nameof(CoachReview), reviewId,
+            new { review.CoachId, review.MemberId, review.Rating, review.Comment, reason });
+        notifications.AddNotification(review.MemberId, actorId, NotificationType.General, "Đánh giá HLV của bạn đã bị gỡ",
+            $"Đánh giá {review.Rating}/5 sao cho HLV {review.Coach.FullName} đã bị gỡ" + (string.IsNullOrEmpty(reason) ? "." : $". Lý do: {reason}"),
+            $"coach-review:{reviewId}:deleted");
+        await reviews.SaveAsync(ct);
+    }
+
     public async Task<CoachRatingDto> SetFeaturedAsync(int actorId, int coachId, bool featured, CancellationToken ct)
     {
-        var actor = await users.GetByIdAsync(actorId);
-        if (actor is null || !actor.IsActive || actor.Role is not (UserRole.Manager or UserRole.Receptionist))
-            throw SchedulingException.Forbidden("COACH_FEATURE_FORBIDDEN", "Chỉ quản lý hoặc lễ tân được đánh dấu HLV tiêu biểu.");
+        await StaffAsync(actorId, "COACH_FEATURE_FORBIDDEN", "Chỉ quản lý hoặc lễ tân được đánh dấu HLV tiêu biểu.");
         var coach = await profiles.GetActiveCoachAsync(coachId, true, ct)
             ?? throw SchedulingException.NotFound("COACH_NOT_FOUND", "Không tìm thấy HLV đang hoạt động.");
         var profile = coach.CoachProfile ??= new CoachProfile { UserId = coachId };
@@ -83,12 +114,22 @@ public sealed class CoachReviewService(ICoachReviewRepository reviews, ICoachPro
         return Rating(coachId, await reviews.GetStatsAsync(ct), featured);
     }
 
-    private async Task MemberAsync(int memberId)
+    private async Task<User> MemberAsync(int memberId)
     {
         var actor = await users.GetByIdAsync(memberId);
         if (actor is null || !actor.IsActive || actor.Role != UserRole.Member)
             throw SchedulingException.Forbidden("COACH_REVIEW_FORBIDDEN", "Chỉ hội viên được đánh giá HLV.");
+        return actor;
     }
+
+    private async Task StaffAsync(int actorId, string code, string message)
+    {
+        var actor = await users.GetByIdAsync(actorId);
+        if (actor is null || !actor.IsActive || actor.Role is not (UserRole.Manager or UserRole.Receptionist))
+            throw SchedulingException.Forbidden(code, message);
+    }
+
+    private static string Clip(string text, int max) => text.Length <= max ? text : text[..max] + "…";
 
     private static CoachRatingDto Rating(int coachId, Dictionary<int, CoachRatingStats> stats, bool featured) =>
         stats.TryGetValue(coachId, out var s) ? new(coachId, Math.Round(s.Average, 1), s.Count, featured) : new(coachId, 0, 0, featured);

@@ -47,6 +47,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CommerceOrder> CommerceOrders => Set<CommerceOrder>();
     public DbSet<CommerceRequest> CommerceRequests => Set<CommerceRequest>();
     public DbSet<CourseEntitlement> CourseEntitlements => Set<CourseEntitlement>();
+    public DbSet<Voucher> Vouchers => Set<Voucher>();
+    public DbSet<VoucherRedemption> VoucherRedemptions => Set<VoucherRedemption>();
+    public DbSet<VoucherGrant> VoucherGrants => Set<VoucherGrant>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -78,6 +81,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<WalletEntry>().HasIndex(x => x.Reference).IsUnique();
         b.Entity<WalletEntry>().Property(x => x.Reference).HasMaxLength(180);
         b.Entity<WalletEntry>().ToTable(t => t.HasCheckConstraint("CK_WalletEntry_Vnd", "\"Amount\" <> 0 AND \"Amount\" = trunc(\"Amount\") AND \"BalanceAfter\" >= 0"));
+        b.Entity<Voucher>().HasIndex(v => v.Code).IsUnique();
+        b.Entity<Voucher>().Property(v => v.Code).HasMaxLength(30);
+        b.Entity<Voucher>().Property(v => v.Description).HasMaxLength(300);
+        b.Entity<Voucher>().HasOne(v => v.CreatedBy).WithMany().HasForeignKey(v => v.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherGrant>().HasIndex(g => new { g.VoucherId, g.MemberId }).IsUnique();
+        b.Entity<VoucherGrant>().HasOne(g => g.Member).WithMany().HasForeignKey(g => g.MemberId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherGrant>().HasOne(g => g.GrantedBy).WithMany().HasForeignKey(g => g.GrantedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherRedemption>().HasIndex(r => new { r.VoucherId, r.MemberId });
+        b.Entity<VoucherRedemption>().HasIndex(r => r.OrderId).IsUnique();
+        b.Entity<VoucherRedemption>().HasOne(r => r.Member).WithMany().HasForeignKey(r => r.MemberId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<CommerceOrder>().ToTable(t => t.HasCheckConstraint("CK_Order_Refund", "\"PaidAmount\" > 0 AND \"RefundedAmount\" >= 0 AND \"RefundedAmount\" <= \"PaidAmount\""));
         b.Entity<CommerceRequest>().Property(x => x.Key).HasMaxLength(100);
         b.Entity<CommerceRequest>().HasIndex(x => new { x.ActorId, x.Operation, x.Key }).IsUnique();

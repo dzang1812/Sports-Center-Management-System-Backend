@@ -13,7 +13,7 @@ public record ReplaceAvailabilityRequest([param: Required] List<AvailabilityRang
 public record PtCoachDto(int Id, string FullName, string? AvatarUrl, string? Bio, string? Certifications, List<SportDto> Sports,
     double AverageRating = 0, int ReviewCount = 0, bool IsFeatured = false);
 public record PtSlotDto(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, TimeOnly EndTime);
-public record CreatePtBookingRequest(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, int? RoomId, int? MemberId, PtFundingSource FundingSource = PtFundingSource.LegacyCredit, decimal? ExpectedPrice = null);
+public record CreatePtBookingRequest(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, int? RoomId, int? MemberId, PtFundingSource FundingSource = PtFundingSource.LegacyCredit, decimal? ExpectedPrice = null, string? VoucherCode = null);
 public record ReschedulePtBookingRequest(DateOnly Date, TimeOnly StartTime, int? RoomId);
 public record CancelPtBookingRequest([param: StringLength(500)] string? Reason);
 public record ManagerCancelPtBookingRequest([param: Required, StringLength(500, MinimumLength = 2)] string Reason);
@@ -140,7 +140,7 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             if (sport?.PtSinglePrice is not { } price) throw SchedulingException.Conflict("PT_PRICE_UNSET", "Trung tâm chưa cấu hình giá PT lẻ.");
             Flow2CommerceService.EnsureExpectedPrice(request.ExpectedPrice, price);
             order = await commerce.PurchaseAsync(memberId, actorId, CommerceOrderKind.PtSingle, price,
-                new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token);
+                new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token, request.VoucherCode);
         }
         else
         {

@@ -14,7 +14,10 @@ public interface ICoachReviewRepository
     Task<CoachReview?> GetAsync(int coachId, int memberId, CancellationToken ct);
     Task<List<int>> ListTrainedCoachIdsAsync(int memberId, DateOnly today, TimeOnly now, CancellationToken ct);
     Task<List<User>> ListActiveCoachesAsync(IReadOnlyCollection<int> ids, CancellationToken ct);
+    Task<List<CoachReview>> ListAllAsync(int? coachId, CancellationToken ct);
+    Task<CoachReview?> GetByIdAsync(int id, CancellationToken ct);
     void Add(CoachReview review);
+    void Remove(CoachReview review);
     Task SaveAsync(CancellationToken ct);
 }
 
@@ -57,6 +60,15 @@ public sealed class CoachReviewRepository(AppDbContext db) : ICoachReviewReposit
         db.Users.AsNoTracking().Where(u => ids.Contains(u.Id) && u.Role == UserRole.Coach && u.IsActive)
             .OrderBy(u => u.FullName).ToListAsync(ct);
 
+    public Task<List<CoachReview>> ListAllAsync(int? coachId, CancellationToken ct) =>
+        db.CoachReviews.AsNoTracking().Include(r => r.Coach).Include(r => r.Member)
+            .Where(r => coachId == null || r.CoachId == coachId)
+            .OrderByDescending(r => r.UpdatedAt).ToListAsync(ct);
+
+    public Task<CoachReview?> GetByIdAsync(int id, CancellationToken ct) =>
+        db.CoachReviews.Include(r => r.Coach).FirstOrDefaultAsync(r => r.Id == id, ct);
+
     public void Add(CoachReview review) => db.CoachReviews.Add(review);
+    public void Remove(CoachReview review) => db.CoachReviews.Remove(review);
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }
