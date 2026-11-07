@@ -1,5 +1,4 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Security.Cryptography;
@@ -92,7 +91,8 @@ public class AuthService(IUserRepository users, IOptions<JwtOptions> jwtOptions,
 
             var link = $"{mailOptions.Value.FrontendUrl}/reset-password?token={raw}";
             await mail.SendAsync(user.Email, "Đặt lại mật khẩu",
-                $"Chào {user.FullName},\n\nBấm vào link để đặt lại mật khẩu (hết hạn sau 15 phút, chỉ dùng 1 lần):\n{link}\n\nNếu bạn không yêu cầu, hãy bỏ qua email này.");
+                $"Chào {user.FullName},\n\nBấm vào link để đặt lại mật khẩu (hết hạn sau 15 phút, chỉ dùng 1 lần):\n{link}\n\nNếu bạn không yêu cầu, hãy bỏ qua email này.",
+                EmailTemplates.ResetPassword(user.FullName, link));
         }
         catch (Exception ex) { log.LogError(ex, "Could not send reset mail to {Email}", user.Email); }
     }
@@ -130,44 +130,7 @@ public class AuthService(IUserRepository users, IOptions<JwtOptions> jwtOptions,
         var link = $"{mailOptions.Value.FrontendUrl}/verify-email?token={raw}";
         await mail.SendAsync(user.Email, "Xác thực email",
             $"Chào {user.FullName},\n\nBấm vào link để xác thực email (hết hạn sau 24 giờ):\n{link}",
-            BuildVerificationHtml(user.FullName, link));
-    }
-
-    private static string BuildVerificationHtml(string fullName, string link)
-    {
-        var name = WebUtility.HtmlEncode(fullName);
-        var href = WebUtility.HtmlEncode(link);
-        return $$"""
-            <!doctype html>
-            <html lang="vi"><head><meta charset="utf-8"></head>
-            <body style="margin:0;padding:0;background-color:#eef0f5;font-family:Arial,Helvetica,sans-serif;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef0f5;padding:40px 16px;">
-              <tr><td align="center">
-                <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(16,24,40,0.08);">
-                  <tr><td style="padding:32px 32px 8px 32px;" align="center">
-                    <span style="font-size:22px;font-weight:800;color:#4338ca;letter-spacing:0.5px;">FIT<span style="color:#0b1c30;">ZONE</span></span>
-                    <div style="font-size:11px;letter-spacing:2px;color:#8a8fa3;margin-top:2px;">SPORTS CENTER</div>
-                  </td></tr>
-                  <tr><td style="padding:16px 32px 0 32px;" align="center"><h1 style="margin:0;font-size:20px;color:#1d2433;">Xác thực email</h1></td></tr>
-                  <tr><td style="padding:20px 32px 0 32px;color:#3c4257;font-size:14px;line-height:1.6;">
-                    Chào {{name}},<br><br>FitZone gửi bạn link để xác thực email cho tài khoản của bạn.
-                  </td></tr>
-                  <tr><td style="padding:28px 32px 8px 32px;" align="center">
-                    <a href="{{href}}" target="_blank" style="display:inline-block;background-color:#4338ca;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 48px;border-radius:8px;">Verify</a>
-                  </td></tr>
-                  <tr><td style="padding:8px 32px 0 32px;" align="center"><span style="font-size:12px;color:#8a8fa3;font-style:italic;">Link có hiệu lực trong 24 giờ.</span></td></tr>
-                  <tr><td style="padding:24px 32px 32px 32px;">
-                    <div style="background-color:#fff7e6;border:1px solid #ffe4a3;border-radius:8px;padding:12px 16px;font-size:13px;color:#7a5b00;">Nếu bạn không yêu cầu xác thực này, vui lòng bỏ qua email.</div>
-                  </td></tr>
-                  <tr><td style="background-color:#0b1c30;padding:18px 24px;" align="center">
-                    <span style="font-size:11px;color:#aeb4c4;">Đây là email tự động, vui lòng không phản hồi email này.</span><br>
-                    <span style="font-size:11px;color:#6b7390;">© 2026 FitZone Sports Center</span>
-                  </td></tr>
-                </table>
-              </td></tr>
-            </table>
-            </body></html>
-            """;
+            EmailTemplates.Verification(user.FullName, link));
     }
 
     private static string Hash(string raw) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
