@@ -6,6 +6,11 @@ public record RevenueReportData(decimal TotalRevenue, int PaymentCount, int NewM
     int ActiveSubscriptions, int ExpiredSubscriptions, int NewClassBookings);
 // One revenue line: a wallet order (item read from its Snapshot) or a paid legacy subscription payment (PlanId/PlanName).
 public record RevenueSourceRow(CommerceOrderKind Kind, string? Snapshot, int? PlanId, string? PlanName, decimal Amount);
+// Money log line: a wallet ledger entry (Source "wallet") or a top-up that has not reached the wallet yet (Source "payment").
+public record MoneyLogRow(string Source, int SourceId, DateTime At, string Kind, PaymentStatus Status, int MemberId, string MemberName,
+    int? ActorId, string? ActorName, UserRole? ActorRole, decimal Amount, decimal? BalanceAfter, PaymentMethod? Method, string Reference,
+    int? OrderId, CommerceOrderKind? OrderKind, string? OrderSnapshot, int? PaymentId, string? InvoiceNumber,
+    string? VoucherCode, decimal? ListPrice, decimal? DiscountAmount);
 public record PaymentKey(int MemberId);
 public record SubscriptionCancellationBlockers(bool HasOpenGymVisit, int UpcomingClassBookings, int UpcomingPtBookings,
     bool HasPendingPayment);
@@ -45,6 +50,7 @@ public interface IMembershipRepository
 
     Task<RevenueReportData> GetRevenueReportAsync(DateOnly from, DateOnly to, DateTime fromUtc, DateTime toUtcExclusive,
         DateOnly today, CancellationToken ct);
+    Task<List<MoneyLogRow>> ListMoneyLogAsync(DateTime fromUtc, DateTime toUtcExclusive, string search, CancellationToken ct);
     Task<List<RevenueSourceRow>> ListRevenueSourcesAsync(DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct);
     Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
         string search, int page, int pageSize, CancellationToken ct);
