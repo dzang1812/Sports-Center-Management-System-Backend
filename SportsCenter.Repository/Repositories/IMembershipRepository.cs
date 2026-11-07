@@ -4,6 +4,8 @@ namespace SportsCenter.Repository.Repositories;
 
 public record RevenueReportData(decimal TotalRevenue, int PaymentCount, int NewMembers, int NewSubscriptions,
     int ActiveSubscriptions, int ExpiredSubscriptions, int NewClassBookings);
+// One revenue line: a wallet order (item read from its Snapshot) or a paid legacy subscription payment (PlanId/PlanName).
+public record RevenueSourceRow(CommerceOrderKind Kind, string? Snapshot, int? PlanId, string? PlanName, decimal Amount);
 public record PaymentKey(int MemberId);
 public record SubscriptionCancellationBlockers(bool HasOpenGymVisit, int UpcomingClassBookings, int UpcomingPtBookings,
     bool HasPendingPayment);
@@ -43,6 +45,7 @@ public interface IMembershipRepository
 
     Task<RevenueReportData> GetRevenueReportAsync(DateOnly from, DateOnly to, DateTime fromUtc, DateTime toUtcExclusive,
         DateOnly today, CancellationToken ct);
+    Task<List<RevenueSourceRow>> ListRevenueSourcesAsync(DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct);
     Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
         string search, int page, int pageSize, CancellationToken ct);
 

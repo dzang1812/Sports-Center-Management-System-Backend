@@ -135,6 +135,20 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             activeSubscriptions, expiredSubscriptions, newClassBookings);
     }
 
+    // Same revenue definition as GetRevenueReportAsync, one row per payment/order so it can be split by item.
+    public async Task<List<RevenueSourceRow>> ListRevenueSourcesAsync(DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct)
+    {
+        var payments = await db.Payments.AsNoTracking()
+            .Where(p => p.Purpose != PaymentPurpose.WalletTopUp && p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive)
+            .Select(p => new RevenueSourceRow(CommerceOrderKind.Membership, null, p.SubscriptionId != null ? p.Subscription!.PlanId : null,
+                p.SubscriptionId != null ? p.Subscription!.Plan.Name : null, p.Amount))
+            .ToListAsync(ct);
+        var orders = await db.CommerceOrders.AsNoTracking().Where(x => x.CreatedAt >= fromUtc && x.CreatedAt < toUtcExclusive)
+            .Select(x => new RevenueSourceRow(x.Kind, x.Snapshot, null, null, x.PaidAmount - x.RefundedAmount))
+            .ToListAsync(ct);
+        return [.. payments, .. orders];
+    }
+
     public async Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
         string search, int page, int pageSize, CancellationToken ct)
     {
