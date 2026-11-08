@@ -135,6 +135,58 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             activeSubscriptions, expiredSubscriptions, newClassBookings);
     }
 
+    private static readonly string[] MoneyLogKinds = ["CashTopUp", "OnlineTopUp", "Purchase", "Refund"];
+
+    // Wallet top-ups, purchases and refunds (the ledger), plus top-ups still Pending/Failed so money that never arrived shows too.
+    public async Task<List<MoneyLogRow>> ListMoneyLogAsync(DateTime fromUtc, DateTime toUtcExclusive, string search, CancellationToken ct)
+    {
+        var term = search.Trim().ToLower();
+        var memberId = int.TryParse(term, out var id) ? id : 0;
+
+        var entries = db.WalletEntries.AsNoTracking()
+            .Where(x => MoneyLogKinds.Contains(x.Kind) && x.CreatedAt >= fromUtc && x.CreatedAt < toUtcExclusive);
+        if (term.Length > 0)
+            entries = entries.Where(x => x.MemberId == memberId || x.Member.FullName.ToLower().Contains(term)
+                || x.Member.Email.ToLower().Contains(term) || x.Actor.FullName.ToLower().Contains(term));
+        var ledger = await entries.Select(x => new MoneyLogRow("wallet", x.Id, x.CreatedAt, x.Kind, PaymentStatus.Paid,
+                x.MemberId, x.Member.FullName, x.ActorId, x.Actor.FullName, x.Actor.Role, x.Amount, x.BalanceAfter,
+                x.Payment != null ? x.Payment.Method : null, x.Reference, x.OrderId,
+                x.Order != null ? x.Order.Kind : null, x.Order != null ? x.Order.Snapshot : null,
+                x.PaymentId, x.Payment != null ? x.Payment.InvoiceNumber : null,
+                x.Kind == "Purchase" ? db.VoucherRedemptions.Where(v => v.OrderId == x.OrderId).Select(v => v.Voucher.Code).FirstOrDefault() : null,
+                x.Kind == "Purchase" ? db.VoucherRedemptions.Where(v => v.OrderId == x.OrderId).Select(v => (decimal?)v.ListPrice).FirstOrDefault() : null,
+                x.Kind == "Purchase" ? db.VoucherRedemptions.Where(v => v.OrderId == x.OrderId).Select(v => (decimal?)v.DiscountAmount).FirstOrDefault() : null))
+            .ToListAsync(ct);
+
+        // Payment has no CreatedAt: PaidAt defaults to creation time and stays so until the payment is paid.
+        var payments = db.Payments.AsNoTracking().Where(p => p.Purpose == PaymentPurpose.WalletTopUp
+            && (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Failed) && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive);
+        if (term.Length > 0)
+            payments = payments.Where(p => p.MemberId == memberId || p.Member.FullName.ToLower().Contains(term)
+                || p.Member.Email.ToLower().Contains(term) || (p.ReceivedBy != null && p.ReceivedBy.FullName.ToLower().Contains(term)));
+        var unpaid = await payments.Select(p => new MoneyLogRow("payment", p.Id, p.PaidAt,
+                p.Method == PaymentMethod.Cash ? "CashTopUp" : "OnlineTopUp", p.Status, p.MemberId, p.Member.FullName,
+                p.ReceivedById ?? p.MemberId, p.ReceivedBy != null ? p.ReceivedBy.FullName : p.Member.FullName,
+                p.ReceivedBy != null ? p.ReceivedBy.Role : p.Member.Role, p.Amount, null, p.Method, $"payment:{p.Id}",
+                null, null, null, p.Id, p.InvoiceNumber, null, null, null))
+            .ToListAsync(ct);
+        return [.. ledger, .. unpaid];
+    }
+
+    // Same revenue definition as GetRevenueReportAsync, one row per payment/order so it can be split by item.
+    public async Task<List<RevenueSourceRow>> ListRevenueSourcesAsync(DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct)
+    {
+        var payments = await db.Payments.AsNoTracking()
+            .Where(p => p.Purpose != PaymentPurpose.WalletTopUp && p.Status == PaymentStatus.Paid && p.PaidAt >= fromUtc && p.PaidAt < toUtcExclusive)
+            .Select(p => new RevenueSourceRow(CommerceOrderKind.Membership, null, p.SubscriptionId != null ? p.Subscription!.PlanId : null,
+                p.SubscriptionId != null ? p.Subscription!.Plan.Name : null, p.Amount))
+            .ToListAsync(ct);
+        var orders = await db.CommerceOrders.AsNoTracking().Where(x => x.CreatedAt >= fromUtc && x.CreatedAt < toUtcExclusive)
+            .Select(x => new RevenueSourceRow(x.Kind, x.Snapshot, null, null, x.PaidAmount - x.RefundedAmount))
+            .ToListAsync(ct);
+        return [.. payments, .. orders];
+    }
+
     public async Task<WalletReceiptReportData> GetWalletReceiptsAsync(DateTime fromUtc, DateTime toUtcExclusive,
         string search, int page, int pageSize, CancellationToken ct)
     {

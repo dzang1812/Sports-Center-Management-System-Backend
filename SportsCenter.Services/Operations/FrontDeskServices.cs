@@ -76,6 +76,14 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         };
         repo.AddSupportRequest(request);
         if (staff) Notify(request, actorId, $"Trung tâm đã ghi nhận yêu cầu của bạn: {request.Subject}.");
+        else
+            // Member-submitted requests land in the front-desk queue: ping every active receptionist.
+            foreach (var receptionistId in await repo.ListActiveReceptionistIdsAsync(ct))
+                notifications.Add(new Notification
+                {
+                    UserId = receptionistId, SenderId = actorId, Type = NotificationType.General, Title = "Yêu cầu hỗ trợ mới",
+                    Body = $"{actor.FullName} (#{actorId}): {request.Subject}. Mở mục Hỗ trợ để xử lý.", CreatedAt = now,
+                });
         await repo.SaveChangesAsync(ct);
         return ToDto((await repo.GetSupportRequestAsync(request.Id, ct))!);
     }

@@ -1,3 +1,4 @@
+using SportsCenter.Services.Membership;
 using System.Text.Json;
 using SportsCenter.Repository.Entities;
 using SportsCenter.Repository.Repositories;
@@ -5,7 +6,7 @@ using SportsCenter.Services.Scheduling;
 
 namespace SportsCenter.Services.Payments;
 
-public record BuyRequest(int? MemberId, decimal? ExpectedPrice = null);
+public record BuyRequest(int? MemberId, decimal? ExpectedPrice = null, string? VoucherCode = null);
 public record CoursePublishRequest(bool Open);
 public record CourseTermsRequest(decimal Fee, int ExpectedSessions, DateTime EnrollmentClosesAt);
 public record CourseCutoffRequest(DateTime EnrollmentClosesAt);
@@ -34,7 +35,7 @@ public static class CommercePolicy
 
 public sealed partial class Flow2CommerceService(ICommerceRepository repo, WalletService wallet, ISchedulingTransaction tx,
     IScheduleUserRepository users, IScheduleConflictRepository conflicts, IAuditLogRepository audit,
-    INotificationRepository notifications, IAppClock clock)
+    INotificationRepository notifications, IAppClock clock, MemberTierService tiers, VoucherService vouchers)
 {
 
     public async Task<object> PtPricesAsync(CancellationToken ct) => await repo.ListPtPricesAsync(ct);
@@ -168,7 +169,7 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             var order = await PurchaseAsync(member, actor, CommerceOrderKind.Course, c.CourseFee,
                 new { c.Id, c.Name, c.SportId, c.ExpectedSessions, c.CourseFee,
                     SessionPrice = c.ExpectedSessions > 0 && c.CourseFee % c.ExpectedSessions == 0 ? (decimal?)(c.CourseFee / c.ExpectedSessions) : null,
-                    c.StartDate, c.EndDate, c.EnrollmentClosesAt, Policy = "course-v1", Sessions = sessions.Select(x => new { x.Id, x.Date, x.StartTime, x.EndTime }).ToArray() }, token);
+                    c.StartDate, c.EndDate, c.EnrollmentClosesAt, Policy = "course-v1", Sessions = sessions.Select(x => new { x.Id, x.Date, x.StartTime, x.EndTime }).ToArray() }, token, request.VoucherCode);
             var enrollment = old ?? new ClassEnrollment { ClassId = id, MemberId = member };
             if (old == null) repo.Add(enrollment);
             enrollment.OrderId = order.Id; enrollment.Status = EnrollmentStatus.Confirmed; enrollment.EnrolledAt = clock.UtcNow; enrollment.CancelledAt = null;
@@ -317,7 +318,7 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             var end = p.DurationMonths > 0 ? start.AddMonths(p.DurationMonths).AddDays(-1) : start.AddDays(p.DurationDays - 1);
             EnsureExpectedPrice(request.ExpectedPrice, p.Price);
             var order = await PurchaseAsync(member, actor, CommerceOrderKind.PtPackage, p.Price,
-                new { p.Id, p.Name, p.Price, p.PtSessionCredits, p.SportId, StartDate = start, EndDate = end, Policy = "pt-package-v1", CutoffHours = 12 }, token);
+                new { p.Id, p.Name, p.Price, p.PtSessionCredits, p.SportId, StartDate = start, EndDate = end, Policy = "pt-package-v1", CutoffHours = 12 }, token, request.VoucherCode);
             var sub = new MemberSubscription { MemberId = member, PlanId = p.Id, PurchaseOrderId = order.Id, SnapshotPtCredits = p.PtSessionCredits,
                 SnapshotSportId = p.SportId, StartDate = start, EndDate = end, Status = SubscriptionStatus.Active, RemainingPtSessions = p.PtSessionCredits };
             repo.Add(sub); await tx.SaveChangesAsync(token);
@@ -345,12 +346,23 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return subId;
         }, ct);
 
-    public async Task<CommerceOrder> PurchaseAsync(int member, int actor, CommerceOrderKind kind, decimal price, object snapshot, CancellationToken ct)
+    // `price` is the list price (checked against ExpectedPrice by callers); a voucher lowers what is actually charged.
+    public async Task<CommerceOrder> PurchaseAsync(int member, int actor, CommerceOrderKind kind, decimal price, object snapshot, CancellationToken ct,
+        string? voucherCode = null)
     {
         WalletService.ValidateMoney(price);
-        var order = new CommerceOrder { MemberId = member, ActorId = actor, Kind = kind, PaidAmount = price, Snapshot = JsonSerializer.Serialize(snapshot), CreatedAt = clock.UtcNow };
+        AppliedVoucher? applied = null;
+        if (!string.IsNullOrWhiteSpace(voucherCode))
+        {
+            await tx.LockAsync([new(ScheduleResourceType.Voucher, await vouchers.FindIdAsync(voucherCode, ct))], ct);
+            applied = await vouchers.ResolveForPurchaseAsync(member, voucherCode, kind, price, ct);
+        }
+        var paid = price - (applied?.DiscountAmount ?? 0m);
+        var order = new CommerceOrder { MemberId = member, ActorId = actor, Kind = kind, PaidAmount = paid, Snapshot = JsonSerializer.Serialize(snapshot), CreatedAt = clock.UtcNow };
         repo.Add(order); await tx.SaveChangesAsync(ct);
-        await wallet.MoveAsync(member, actor, -price, "Purchase", $"order:{order.Id}:purchase", order.Id, null, ct);
+        if (applied is not null) vouchers.Redeem(applied, member, order, price);
+        await wallet.MoveAsync(member, actor, -paid, "Purchase", $"order:{order.Id}:purchase", order.Id, null, ct);
+        await tiers.CheckUpgradeAsync(member, ct);
         return order;
     }
 

@@ -38,7 +38,7 @@ public interface ISubscriptionService
 }
 
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
-    ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions, WalletService wallet) : ISubscriptionService
+    ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions, WalletService wallet, MemberTierService tiers) : ISubscriptionService
 {
     public async Task<PaymentDto> GetCounterTopUpCheckoutAsync(int actorId, int paymentId, CancellationToken ct)
     {
@@ -276,6 +276,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             await wallet.MoveAsync(payment.MemberId, actorId, payment.Amount, "OnlineTopUp", $"payment:{payment.Id}:credit", null, payment.Id, ct);
         }
         else if (payment.Subscription is not null) await ActivateOrMergeSubscriptionAsync(payment, ct);
+        if (payment.Purpose == PaymentPurpose.LegacySubscription) await tiers.CheckUpgradeAsync(payment.MemberId, ct, payment.Amount);
         payment.InvoiceNumber = payment.Purpose == PaymentPurpose.WalletTopUp ? $"WAL-{payment.Id:D8}" : $"INV-{clock.LocalNow:yyyyMMdd}-{payment.SubscriptionId:D6}";
         await repo.AddAuditAsync(actorId, "Payment.Confirmed", nameof(Payment), payment.Id,
             new { payment.PayOsOrderCode, Reference = reference }, ct);

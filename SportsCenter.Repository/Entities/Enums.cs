@@ -22,3 +22,5 @@ public enum SupportStatus { Open, InProgress, Resolved, WaitingForMember, Closed
 public enum SupportCategory { Payment, Membership, Schedule, Facility, Account, Other }
 public enum AiSuggestionStatus { Suggested, Accepted, Rejected }
 public enum ChatRole { User, Assistant }
+public enum MemberTier { New, Loyal, Bronze, Silver, Gold, Diamond }
+public enum VoucherDiscountType { Percent, Amount }

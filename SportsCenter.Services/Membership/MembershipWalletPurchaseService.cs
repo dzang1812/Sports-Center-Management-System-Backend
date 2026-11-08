@@ -45,7 +45,7 @@ public sealed class MembershipWalletPurchaseService(IMembershipRepository plans,
         catch (ArgumentOutOfRangeException) { throw new SchedulingException("PLAN_DURATION_INVALID", "Thời hạn gia hạn vượt giới hạn ngày hỗ trợ."); }
         var order = await purchases.PurchaseAsync(memberId, actorId, CommerceOrderKind.Membership, plan.Price,
             new { plan.Id, plan.Name, plan.Price, plan.SportId, plan.DurationDays, plan.DurationMonths,
-                plan.IncludesGymAccess, StartDate = start, EndDate = end, Policy = "self-practice-wallet-v1" }, token);
+                plan.IncludesGymAccess, StartDate = start, EndDate = end, Policy = "self-practice-wallet-v1" }, token, request.VoucherCode);
         var subscription = new MemberSubscription
         {
             MemberId = memberId, PlanId = planId, PurchaseOrderId = order.Id,

@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MemberProfile> MemberProfiles => Set<MemberProfile>();
     public DbSet<EmailToken> EmailTokens => Set<EmailToken>();
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
+    public DbSet<CoachReview> CoachReviews => Set<CoachReview>();
     public DbSet<Sport> Sports => Set<Sport>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Class> Classes => Set<Class>();
@@ -46,6 +47,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CommerceOrder> CommerceOrders => Set<CommerceOrder>();
     public DbSet<CommerceRequest> CommerceRequests => Set<CommerceRequest>();
     public DbSet<CourseEntitlement> CourseEntitlements => Set<CourseEntitlement>();
+    public DbSet<Voucher> Vouchers => Set<Voucher>();
+    public DbSet<VoucherRedemption> VoucherRedemptions => Set<VoucherRedemption>();
+    public DbSet<VoucherGrant> VoucherGrants => Set<VoucherGrant>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -77,6 +81,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<WalletEntry>().HasIndex(x => x.Reference).IsUnique();
         b.Entity<WalletEntry>().Property(x => x.Reference).HasMaxLength(180);
         b.Entity<WalletEntry>().ToTable(t => t.HasCheckConstraint("CK_WalletEntry_Vnd", "\"Amount\" <> 0 AND \"Amount\" = trunc(\"Amount\") AND \"BalanceAfter\" >= 0"));
+        b.Entity<Voucher>().HasIndex(v => v.Code).IsUnique();
+        b.Entity<Voucher>().Property(v => v.Code).HasMaxLength(30);
+        b.Entity<Voucher>().Property(v => v.Description).HasMaxLength(300);
+        b.Entity<Voucher>().HasOne(v => v.CreatedBy).WithMany().HasForeignKey(v => v.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherGrant>().HasIndex(g => new { g.VoucherId, g.MemberId }).IsUnique();
+        b.Entity<VoucherGrant>().HasOne(g => g.Member).WithMany().HasForeignKey(g => g.MemberId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherGrant>().HasOne(g => g.GrantedBy).WithMany().HasForeignKey(g => g.GrantedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<VoucherRedemption>().HasIndex(r => new { r.VoucherId, r.MemberId });
+        b.Entity<VoucherRedemption>().HasIndex(r => r.OrderId).IsUnique();
+        b.Entity<VoucherRedemption>().HasOne(r => r.Member).WithMany().HasForeignKey(r => r.MemberId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<CommerceOrder>().ToTable(t => t.HasCheckConstraint("CK_Order_Refund", "\"PaidAmount\" > 0 AND \"RefundedAmount\" >= 0 AND \"RefundedAmount\" <= \"PaidAmount\""));
         b.Entity<CommerceRequest>().Property(x => x.Key).HasMaxLength(100);
         b.Entity<CommerceRequest>().HasIndex(x => new { x.ActorId, x.Operation, x.Key }).IsUnique();
@@ -100,6 +114,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<CoachProfile>().Property(p => p.StudentAfterImageUrl).HasMaxLength(2048);
         b.Entity<CoachProfile>().Property(p => p.StudentResultSummary).HasMaxLength(1000);
         b.Entity<CoachProfile>().HasMany(p => p.Sports).WithMany();
+        b.Entity<CoachReview>().HasOne(r => r.Coach).WithMany().HasForeignKey(r => r.CoachId);
+        b.Entity<CoachReview>().HasOne(r => r.Member).WithMany().HasForeignKey(r => r.MemberId);
+        b.Entity<CoachReview>().HasIndex(r => new { r.CoachId, r.MemberId }).IsUnique();
+        b.Entity<CoachReview>().Property(r => r.Comment).HasMaxLength(1000);
+        b.Entity<CoachReview>().ToTable(t => t.HasCheckConstraint("CK_CoachReview_Rating", "\"Rating\" BETWEEN 1 AND 5"));
 
         b.Entity<ClassEnrollment>().HasIndex(e => new { e.ClassId, e.MemberId }).IsUnique();
         b.Entity<Sport>().HasIndex(s => s.Name).IsUnique();

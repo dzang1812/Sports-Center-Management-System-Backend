@@ -33,6 +33,7 @@ public interface IFrontDeskRepository
 
     Task<List<ExpiringSubscriptionRow>> ListExpiringSubscriptionsAsync(DateOnly from, DateOnly to, CancellationToken ct);
     Task<HashSet<string>> ExistingNotificationKeysAsync(IReadOnlyCollection<string> keys, CancellationToken ct);
+    Task<List<int>> ListActiveReceptionistIdsAsync(CancellationToken ct);
 
     Task SaveChangesAsync(CancellationToken ct);
 }
@@ -142,6 +143,9 @@ public class FrontDeskRepository(AppDbContext db) : IFrontDeskRepository
     public async Task<HashSet<string>> ExistingNotificationKeysAsync(IReadOnlyCollection<string> keys, CancellationToken ct) =>
         [.. await db.Notifications.Where(n => n.DeduplicationKey != null && keys.Contains(n.DeduplicationKey))
             .Select(n => n.DeduplicationKey!).ToListAsync(ct)];
+
+    public Task<List<int>> ListActiveReceptionistIdsAsync(CancellationToken ct) =>
+        db.Users.Where(u => u.Role == UserRole.Receptionist && u.IsActive).Select(u => u.Id).ToListAsync(ct);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

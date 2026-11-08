@@ -10,9 +10,10 @@ namespace SportsCenter.Services.Scheduling;
 public record AvailabilityItem(int Id, int SportId, string Sport, DayOfWeek DayOfWeek, TimeOnly StartTime, TimeOnly EndTime);
 public record AvailabilityRange(int SportId, DayOfWeek DayOfWeek, TimeOnly StartTime, TimeOnly EndTime);
 public record ReplaceAvailabilityRequest([param: Required] List<AvailabilityRange> Items);
-public record PtCoachDto(int Id, string FullName, string? AvatarUrl, string? Bio, string? Certifications, List<SportDto> Sports);
+public record PtCoachDto(int Id, string FullName, string? AvatarUrl, string? Bio, string? Certifications, List<SportDto> Sports,
+    double AverageRating = 0, int ReviewCount = 0, bool IsFeatured = false);
 public record PtSlotDto(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, TimeOnly EndTime);
-public record CreatePtBookingRequest(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, int? RoomId, int? MemberId, PtFundingSource FundingSource = PtFundingSource.LegacyCredit, decimal? ExpectedPrice = null);
+public record CreatePtBookingRequest(int CoachId, int SportId, DateOnly Date, TimeOnly StartTime, int? RoomId, int? MemberId, PtFundingSource FundingSource = PtFundingSource.LegacyCredit, decimal? ExpectedPrice = null, string? VoucherCode = null);
 public record ReschedulePtBookingRequest(DateOnly Date, TimeOnly StartTime, int? RoomId);
 public record CancelPtBookingRequest([param: StringLength(500)] string? Reason);
 public record ManagerCancelPtBookingRequest([param: Required, StringLength(500, MinimumLength = 2)] string Reason);
@@ -45,7 +46,7 @@ public interface IPtService
 public sealed partial class PtService(IPtRepository pt, IScheduleConflictRepository scheduleConflicts, ICatalogRepository catalog,
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options, WalletService wallet, Flow2CommerceService commerce,
-    ICommerceRepository commerceRepo, IMembershipRepository membershipRepo, ISubscriptionService payments) : IPtService
+    ICommerceRepository commerceRepo, IMembershipRepository membershipRepo, ISubscriptionService payments, ICoachReviewRepository coachReviews) : IPtService
 {
     private readonly SchedulingOptions settings = options.Value;
 
@@ -80,9 +81,18 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
     public async Task<List<PtCoachDto>> ListCoachesAsync(int? sportId, CancellationToken ct)
     {
         var coaches = await users.ListPtCoachesAsync(sportId, ct);
-        return coaches.Select(x => new PtCoachDto(x.Id, x.FullName, x.AvatarUrl, x.CoachProfile!.Bio, x.CoachProfile.Certifications,
-            x.CoachProfile.Sports.Where(s => s.HasPt && s.Status == SportStatus.Active)
-                .Select(s => new SportDto(s.Id, s.Name, s.Description, s.HasClasses, s.HasPt, s.Status)).ToList())).ToList();
+        var ratings = await coachReviews.GetStatsAsync(ct);
+        // Featured picks first, then best rated (more reviews break ties), then name.
+        return coaches.Select(x =>
+            {
+                var r = ratings.GetValueOrDefault(x.Id);
+                return new PtCoachDto(x.Id, x.FullName, x.AvatarUrl, x.CoachProfile!.Bio, x.CoachProfile.Certifications,
+                    x.CoachProfile.Sports.Where(s => s.HasPt && s.Status == SportStatus.Active)
+                        .Select(s => new SportDto(s.Id, s.Name, s.Description, s.HasClasses, s.HasPt, s.Status)).ToList(),
+                    r is null ? 0 : Math.Round(r.Average, 1), r?.Count ?? 0, x.CoachProfile.IsFeatured);
+            })
+            .OrderByDescending(x => x.IsFeatured).ThenByDescending(x => x.AverageRating).ThenByDescending(x => x.ReviewCount)
+            .ThenBy(x => x.FullName).ToList();
     }
 
     public async Task<List<PtSlotDto>> ListSlotsAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct)
@@ -130,7 +140,7 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             if (sport?.PtSinglePrice is not { } price) throw SchedulingException.Conflict("PT_PRICE_UNSET", "Trung tâm chưa cấu hình giá PT lẻ.");
             Flow2CommerceService.EnsureExpectedPrice(request.ExpectedPrice, price);
             order = await commerce.PurchaseAsync(memberId, actorId, CommerceOrderKind.PtSingle, price,
-                new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token);
+                new { request.CoachId, request.SportId, Price = price, Minutes = 60, Policy = "pt-single-v1", CutoffHours = 12 }, token, request.VoucherCode);
         }
         else
         {

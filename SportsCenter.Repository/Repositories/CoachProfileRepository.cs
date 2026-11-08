@@ -7,6 +7,7 @@ namespace SportsCenter.Repository.Repositories;
 public interface ICoachProfileRepository
 {
     Task<User?> GetActiveCoachAsync(int coachId, bool tracking, CancellationToken ct);
+    Task<HashSet<int>> ListFeaturedCoachIdsAsync(CancellationToken ct);
     Task SaveAsync(CancellationToken ct);
 }
 
@@ -18,6 +19,9 @@ public sealed class CoachProfileRepository(AppDbContext db) : ICoachProfileRepos
             .Include(u => u.CoachProfile!).ThenInclude(p => p.Sports);
         return (tracking ? coaches : coaches.AsNoTracking()).FirstOrDefaultAsync(ct);
     }
+
+    public async Task<HashSet<int>> ListFeaturedCoachIdsAsync(CancellationToken ct) =>
+        [.. await db.CoachProfiles.Where(p => p.IsFeatured && p.User.IsActive).Select(p => p.UserId).ToListAsync(ct)];
 
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }
