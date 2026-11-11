@@ -24,6 +24,8 @@ public record PaymentDto(int Id, int MemberId, string MemberName, int? Subscript
     decimal Amount, PaymentMethod Method, PaymentStatus Status, string? InvoiceNumber, DateTime PaidAt,
     string? CheckoutUrl, string? QrCode, string? ReceivedByName, PaymentPurpose Purpose = PaymentPurpose.LegacySubscription);
 
+public record PayOsSyncSummary(int Checked, int MarkedFailed, int CancelledOnPayOs, int StillPending, int Errors);
+
 public interface ISubscriptionService
 {
     Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct);
@@ -35,6 +37,9 @@ public interface ISubscriptionService
     Task<List<PaymentDto>> ListPendingCounterPaymentsAsync(int actorId, CancellationToken ct);
     Task HandleWebhookAsync(Webhook webhook, CancellationToken ct);
     Task<string> ConfirmWebhookUrlAsync(int actorId, string webhookUrl, CancellationToken ct);
+    Task<PaymentDto> SyncPayOsStatusAsync(int actorId, int paymentId, CancellationToken ct);
+    Task<PayOsSyncSummary> SyncPendingPayOsAsync(int actorId, CancellationToken ct);
+    Task<PayOsSyncSummary> SyncAllPendingPayOsAsync(CancellationToken ct);
 }
 
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
@@ -91,6 +96,12 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         if (method != PaymentMethod.BankTransfer && actor.Role != UserRole.Receptionist)
             throw SchedulingException.Forbidden("COUNTER_PAYMENT_REQUIRES_RECEPTIONIST",
                 "Chỉ lễ tân được tạo thanh toán tiền mặt hoặc thẻ tại quầy.");
+
+        // A pending PayOS order for this plan is reused below; if its link was cancelled or has expired, close it first.
+        var previous = await repo.GetPendingSubscriptionPaymentAsync(member.Id, request.PlanId, ct);
+        if (previous is { Method: PaymentMethod.BankTransfer, CheckoutUrl: not null })
+            try { await SyncWithPayOsAsync(actorId, previous.Id, cancelStale: false, ct); }
+            catch (SchedulingException) { } // PayOS unreachable: keep the old order, as before
 
         var draft = await transaction.ExecuteAsync(async token =>
         {
@@ -228,14 +239,98 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
                 payment.ProviderReference = "payos:" + data.Reference;
                 await ConfirmPaymentAsync(payment, payment.MemberId, data.Reference, token);
             }
-            else
-            {
-                payment.Status = PaymentStatus.Failed;
-                if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Cancelled;
-                await repo.AddAuditAsync(payment.MemberId, "Payment.Failed", nameof(Payment), payment.Id,
-                    new { payment.PayOsOrderCode }, token);
-            }
+            else await MarkFailedAsync(payment, payment.MemberId, new { payment.PayOsOrderCode }, token);
             return 0;
+        }, ct);
+    }
+
+    private async Task MarkFailedAsync(Payment payment, int actorId, object details, CancellationToken ct)
+    {
+        payment.Status = PaymentStatus.Failed;
+        if (payment.Subscription is not null) payment.Subscription.Status = SubscriptionStatus.Cancelled;
+        await repo.AddAuditAsync(actorId, "Payment.Failed", nameof(Payment), payment.Id, details, ct);
+    }
+
+    // PayOS links expire this long after creation (ExpiredAt). The sync job also cancels older links created before expiry was set.
+    private static readonly TimeSpan PayOsLinkLifetime = TimeSpan.FromMinutes(15);
+
+    private enum SyncOutcome { Skipped, MarkedFailed, CancelledOnPayOs, StillPending }
+
+    // PayOS only webhooks successful payments; a link the buyer cancelled or that expired is learnt by asking PayOS.
+    public async Task<PaymentDto> SyncPayOsStatusAsync(int actorId, int paymentId, CancellationToken ct)
+    {
+        // Same access rules as GetPaymentAsync, checked without tracking the row so the final read below sees the committed state.
+        var actor = await users.GetByIdAsync(actorId)
+            ?? throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
+        var state = await repo.GetPayOsStateAsync(paymentId, ct)
+            ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch thanh toán.");
+        if (actor.Role == UserRole.Member && state.MemberId != actorId)
+            throw SchedulingException.Forbidden("PAYMENT_NOT_OWNED", "Không thể xem giao dịch của hội viên khác.");
+        if (actor.Role is not (UserRole.Member or UserRole.Receptionist or UserRole.Manager))
+            throw SchedulingException.Forbidden("ROLE_NOT_ALLOWED", "Vai trò không được xem giao dịch thanh toán.");
+        await SyncWithPayOsAsync(actorId, paymentId, cancelStale: false, ct);
+        return await GetPaymentAsync(actorId, paymentId, ct);
+    }
+
+    public async Task<PayOsSyncSummary> SyncPendingPayOsAsync(int actorId, CancellationToken ct)
+    {
+        await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
+        return await SyncPendingAsync(actorId, ct);
+    }
+
+    // Background worker entry point (no signed-in actor; the audit row is attributed to the member, like the webhook).
+    public Task<PayOsSyncSummary> SyncAllPendingPayOsAsync(CancellationToken ct) => SyncPendingAsync(null, ct);
+
+    private async Task<PayOsSyncSummary> SyncPendingAsync(int? actorId, CancellationToken ct)
+    {
+        var ids = await repo.ListPendingPayOsPaymentIdsAsync(ct);
+        int failed = 0, cancelled = 0, pending = 0, errors = 0;
+        foreach (var id in ids)
+        {
+            try
+            {
+                switch (await SyncWithPayOsAsync(actorId, id, cancelStale: true, ct))
+                {
+                    case SyncOutcome.MarkedFailed: failed++; break;
+                    case SyncOutcome.CancelledOnPayOs: cancelled++; break;
+                    case SyncOutcome.StillPending: pending++; break;
+                }
+            }
+            catch (SchedulingException) { errors++; }
+        }
+        return new(ids.Count, failed, cancelled, pending, errors);
+    }
+
+    // Never marks Paid: money is only credited through the signed webhook.
+    private async Task<SyncOutcome> SyncWithPayOsAsync(int? actorId, int paymentId, bool cancelStale, CancellationToken ct)
+    {
+        var key = await repo.GetPayOsStateAsync(paymentId, ct);
+        if (key is null || key.Status != PaymentStatus.Pending || key.Method != PaymentMethod.BankTransfer || !key.HasCheckoutLink)
+            return SyncOutcome.Skipped;
+        PaymentLink link;
+        try { link = await payOs.PaymentRequests.GetAsync(key.OrderCode, new PayOS.Models.RequestOptions { CancellationToken = ct }); }
+        catch (Exception) { throw new SchedulingException("PAYOS_UNAVAILABLE", "Không lấy được trạng thái từ PayOS. Vui lòng thử lại.", 502); }
+
+        var outcome = SyncOutcome.MarkedFailed;
+        if (link.Status == PaymentLinkStatus.Pending)
+        {
+            var stale = cancelStale && DateTimeOffset.TryParse(link.CreatedAt, out var createdAt) && createdAt.Add(PayOsLinkLifetime) < clock.UtcNow;
+            if (!stale) return SyncOutcome.StillPending;
+            try { await payOs.PaymentRequests.CancelAsync(key.OrderCode, "Quá hạn thanh toán", new PayOS.Models.RequestOptions<CancelPaymentLinkRequest> { CancellationToken = ct }); }
+            catch (Exception) { throw new SchedulingException("PAYOS_UNAVAILABLE", "Không huỷ được link thanh toán trên PayOS.", 502); }
+            outcome = SyncOutcome.CancelledOnPayOs;
+        }
+        else if (link.Status is not (PaymentLinkStatus.Cancelled or PaymentLinkStatus.Expired or PaymentLinkStatus.Failed))
+            return SyncOutcome.StillPending; // Paid (webhook pending), Underpaid, Processing: leave for the webhook / staff
+
+        return await transaction.ExecuteAsync(async token =>
+        {
+            await transaction.LockAsync([new(ScheduleResourceType.Member, key.MemberId)], token);
+            if (await repo.GetPaymentStatusAsync(key.OrderCode, token) != PaymentStatus.Pending) return SyncOutcome.Skipped;
+            var payment = await repo.GetPaymentByOrderCodeAsync(key.OrderCode, token);
+            if (payment is null) return SyncOutcome.Skipped;
+            await MarkFailedAsync(payment, actorId ?? payment.MemberId, new { payment.PayOsOrderCode, PayOsStatus = link.Status.ToString(), Source = "payos-sync" }, token);
+            return outcome;
         }, ct);
     }
 
@@ -257,6 +352,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             Description = description.Length > 25 ? description[..25] : description,
             ReturnUrl = $"{baseUrl}/payment/success?paymentId={payment.Id}",
             CancelUrl = $"{baseUrl}/payment/cancel?paymentId={payment.Id}",
+            ExpiredAt = new DateTimeOffset(clock.UtcNow.Add(PayOsLinkLifetime)).ToUnixTimeSeconds(),
         };
         try { return await payOs.PaymentRequests.CreateAsync(request, new PayOS.Models.RequestOptions<CreatePaymentLinkRequest> { CancellationToken = ct }); }
         catch (Exception)
