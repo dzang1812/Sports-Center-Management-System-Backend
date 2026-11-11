@@ -11,6 +11,9 @@ public sealed class MyScheduleController(IScheduleAttendanceService service) : C
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     [HttpGet("schedule")] public Task<List<PersonalScheduleItem>> Schedule(DateOnly from, DateOnly to, bool includeCancelled = false, CancellationToken ct = default) => service.GetPersonalScheduleAsync(UserId, from, to, includeCancelled, ct);
     [HttpGet("attendance")] public Task<AttendanceHistoryResponse> Attendance(int year, int month, CancellationToken ct) => service.GetAttendanceHistoryAsync(UserId, year, month, ct);
+    [HttpPost("class-sessions/{sessionId:int}/check-in-code")]
+    public Task<ClassCheckInCodeDto> ClassCheckInCode(int sessionId, CancellationToken ct) =>
+        service.IssueClassCheckInCodeAsync(UserId, sessionId, ct);
     [HttpPost("class-sessions/{sessionId:int}/check-in")]
     public Task<ClassSelfCheckInResult> ClassCheckIn(int sessionId, ClassCheckInRequest request, CancellationToken ct) =>
         service.MemberCheckInAsync(UserId, sessionId, request, ct);
