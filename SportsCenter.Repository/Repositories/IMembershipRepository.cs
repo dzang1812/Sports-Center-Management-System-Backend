@@ -12,6 +12,7 @@ public record MoneyLogRow(string Source, int SourceId, DateTime At, string Kind,
     int? OrderId, CommerceOrderKind? OrderKind, string? OrderSnapshot, int? PaymentId, string? InvoiceNumber,
     string? VoucherCode, decimal? ListPrice, decimal? DiscountAmount);
 public record PaymentKey(int MemberId);
+public record PayOsPaymentState(int MemberId, long OrderCode, PaymentStatus Status, PaymentMethod Method, bool HasCheckoutLink);
 public record SubscriptionCancellationBlockers(bool HasOpenGymVisit, int UpcomingClassBookings, int UpcomingPtBookings,
     bool HasPendingPayment);
 public record WalletReceiptRow(int PaymentId, string? InvoiceNumber, int MemberId, string MemberName,
@@ -42,6 +43,9 @@ public interface IMembershipRepository
     Task AddPaymentAsync(Payment payment, CancellationToken ct);
     Task<Payment?> GetPaymentWithDetailsAsync(int id, CancellationToken ct);
     Task<List<Payment>> ListPendingCounterPaymentsAsync(CancellationToken ct);
+    Task<List<int>> ListPendingPayOsPaymentIdsAsync(CancellationToken ct);
+    Task<PaymentStatus?> GetPaymentStatusAsync(long orderCode, CancellationToken ct);
+    Task<PayOsPaymentState?> GetPayOsStateAsync(int paymentId, CancellationToken ct);
     Task<Payment?> GetPaymentByOrderCodeAsync(long orderCode, CancellationToken ct);
     Task<PaymentKey?> GetPaymentKeyAsync(int id, CancellationToken ct);
     Task<PaymentKey?> GetPaymentKeyByOrderCodeAsync(long orderCode, CancellationToken ct);

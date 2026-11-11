@@ -89,6 +89,19 @@ public class MembershipRepository(AppDbContext db) : IMembershipRepository
             .Include(x => x.Subscription!).ThenInclude(x => x.Plan)
             .OrderByDescending(x => x.Id).ToListAsync(ct);
 
+    // Bank-transfer payments that got a PayOS link and are still waiting on it.
+    public Task<List<int>> ListPendingPayOsPaymentIdsAsync(CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.Status == PaymentStatus.Pending && x.Method == PaymentMethod.BankTransfer && x.CheckoutUrl != null)
+            .OrderBy(x => x.Id).Select(x => x.Id).ToListAsync(ct);
+
+    // Read straight from the DB: the tracked entity may predate a webhook committed by another request.
+    public Task<PaymentStatus?> GetPaymentStatusAsync(long orderCode, CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.PayOsOrderCode == orderCode).Select(x => (PaymentStatus?)x.Status).FirstOrDefaultAsync(ct);
+
+    public Task<PayOsPaymentState?> GetPayOsStateAsync(int paymentId, CancellationToken ct) =>
+        db.Payments.AsNoTracking().Where(x => x.Id == paymentId)
+            .Select(x => new PayOsPaymentState(x.MemberId, x.PayOsOrderCode, x.Status, x.Method, x.CheckoutUrl != null)).FirstOrDefaultAsync(ct);
+
     public Task<Payment?> GetPaymentByOrderCodeAsync(long orderCode, CancellationToken ct) =>
         db.Payments.Include(x => x.Subscription).FirstOrDefaultAsync(x => x.PayOsOrderCode == orderCode, ct);
 
