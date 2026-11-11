@@ -159,8 +159,10 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
             if (actor.Role == UserRole.Coach && session.CoachId != actorId)
                 throw SchedulingException.Forbidden("SESSION_NOT_OWNED", "Huấn luyện viên chỉ được mở mã cho buổi mình được phân công.");
-            if (actor.Role is not (UserRole.Coach or UserRole.Receptionist or UserRole.Manager))
+            if (actor.Role is not (UserRole.Member or UserRole.Coach or UserRole.Receptionist or UserRole.Manager))
                 throw SchedulingException.Forbidden("CHECK_IN_CODE_ISSUER_REQUIRED", "Vai trò không được mở mã check-in lớp.");
+            if (actor.Role == UserRole.Member)
+                await RequireEligibleClassBookingAsync(actorId, session, token);
             ValidateCheckInWindow(session);
 
             // Reconstruct the active code from persisted metadata under the session lock.
@@ -201,13 +203,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 ?? throw SchedulingException.NotFound("SESSION_NOT_FOUND", "Không tìm thấy buổi học.");
             ValidateCheckInWindow(session);
             ValidateCheckInCode(session, request.Code);
-            var booking = await attendances.FindConfirmedClassBookingAsync(sessionId, memberId, token)
-                ?? throw SchedulingException.Forbidden("CLASS_BOOKING_REQUIRED", "Bạn không có booking hiệu lực cho buổi này.");
-            if (booking.SubscriptionId != null) _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, token))
-                .FirstOrDefault(x => x.Id == booking.SubscriptionId &&
-                    SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date,
-                        needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules))
-                ?? throw SchedulingException.Conflict("SUBSCRIPTION_NOT_ELIGIBLE", "Gói dùng đặt lớp không còn hiệu lực cho buổi học.");
+            var booking = await RequireEligibleClassBookingAsync(memberId, session, token);
             var existing = await attendances.GetClassAttendanceAsync(sessionId, memberId, token);
             if (existing is not null)
                 return ToCheckInResult("Member", sessionId, memberId, existing.Status, existing.MarkedAt, true);
@@ -311,6 +307,18 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         var state = x.Status?.ToString() ?? (x.LegacyFinalized ? AttendanceStatus.Absent.ToString() : "NotCheckedIn");
         return new(x.MemberId, x.FullName, x.Email, x.BookingId, x.Status ?? AttendanceStatus.Absent,
             x.Status is not null, x.LegacyFinalized, state, x.CheckedInAt, x.Source, x.Profile);
+    }
+
+    private async Task<ClassCheckInBookingRow> RequireEligibleClassBookingAsync(int memberId, ClassSession session, CancellationToken ct)
+    {
+        var booking = await attendances.FindConfirmedClassBookingAsync(session.Id, memberId, ct)
+            ?? throw SchedulingException.Forbidden("CLASS_BOOKING_REQUIRED", "Bạn không có booking hiệu lực cho buổi này.");
+        if (booking.SubscriptionId != null) _ = (await subscriptions.ListForMemberAndSportAsync(memberId, booking.SportId, ct))
+            .FirstOrDefault(x => x.Id == booking.SubscriptionId &&
+                SchedulingRules.SubscriptionCovers(x, booking.SportId, session.Date,
+                    needsClass: true, enforceTimeRules: timeRules.EnforceTimeRules))
+            ?? throw SchedulingException.Conflict("SUBSCRIPTION_NOT_ELIGIBLE", "Gói dùng đặt lớp không còn hiệu lực cho buổi học.");
+        return booking;
     }
 
     private void ValidateCheckInWindow(ClassSession session)
