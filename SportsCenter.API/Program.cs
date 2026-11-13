@@ -136,6 +136,7 @@ builder.Services.AddScoped<SportsCenter.Services.Operations.CoachMessageService>
 builder.Services.AddScoped<SportsCenter.Services.Operations.SubscriptionExpiryNotifier>();
 builder.Services.AddScoped<SportsCenter.Services.Operations.ExpiringSubscriptionService>();
 builder.Services.AddHostedService<SubscriptionExpiryWorker>();
+builder.Services.AddHostedService<PayOsSyncWorker>();
 
 builder.Services.AddScoped<ITrainingRepository, TrainingRepository>();
 builder.Services.AddScoped<ITrainingService, TrainingService>();
