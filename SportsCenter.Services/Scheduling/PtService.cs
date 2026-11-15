@@ -50,6 +50,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
 {
     private readonly SchedulingOptions settings = options.Value;
 
+    // Quản lý lọc lịch tập riêng toàn trung tâm.
+    // Nghiệp vụ: Kiểm tra quản lý đang hoạt động; lọc ngày, hội viên, huấn luyện viên, môn, trạng thái và phân trang.
     public async Task<PagedResponse<PtBookingListItem>> ListBookingsAsync(int actorId, DateOnly? from, DateOnly? to,
         int? memberId, int? coachId, int? sportId, BookingStatus? status, int page, int pageSize, CancellationToken ct)
     {
@@ -70,19 +72,24 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             x.RoomId, x.Room?.Name, x.Status)).ToList(), total, page, pageSize);
     }
 
-    // Compatibility reads show only this week. Recurring writers must upgrade.
+    // Đọc giờ rảnh theo định dạng cũ.
+    // Nghiệp vụ: Chỉ chiếu tuần hiện tại thành thứ/giờ; không khôi phục lịch lặp vô hạn.
     public async Task<List<AvailabilityItem>> GetAvailabilityAsync(int coachId, CancellationToken ct) =>
         (await GetWeekAvailabilityAsync(coachId, WeekStart(DateOnly.FromDateTime(clock.LocalNow)), ct)).Items
             .Select(x => new AvailabilityItem(x.Id, x.SportId, x.Sport, x.Date.DayOfWeek, x.StartTime, x.EndTime)).ToList();
 
+    // Chặn lưu giờ rảnh bằng giao diện cũ.
+    // Nghiệp vụ: Báo cần chọn tuần để giao diện chuyển sang lưu giờ rảnh có ngày cụ thể.
     public Task<List<AvailabilityItem>> ReplaceAvailabilityAsync(int actorId, ReplaceAvailabilityRequest request, CancellationToken ct) =>
         throw new SchedulingException("AVAILABILITY_WEEK_REQUIRED", "Vui lòng tải lại giao diện và chọn tuần để lưu giờ rảnh.");
 
+    // Lấy huấn luyện viên đủ điều kiện nhận tập riêng.
+    // Nghiệp vụ: Lọc môn phù hợp, trả hồ sơ và đánh giá; ưu tiên nổi bật, đánh giá rồi tên để hội viên chọn.
     public async Task<List<PtCoachDto>> ListCoachesAsync(int? sportId, CancellationToken ct)
     {
         var coaches = await users.ListPtCoachesAsync(sportId, ct);
         var ratings = await coachReviews.GetStatsAsync(ct);
-        // Featured picks first, then best rated (more reviews break ties), then name.
+        // Ưu tiên nổi bật, điểm đánh giá cao, số đánh giá nhiều hơn khi bằng điểm, sau cùng là tên.
         return coaches.Select(x =>
             {
                 var r = ratings.GetValueOrDefault(x.Id);
@@ -95,6 +102,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             .ThenBy(x => x.FullName).ToList();
     }
 
+    // Tạo danh sách giờ tập riêng có thể chọn.
+    // Nghiệp vụ: Chia giờ rảnh thành khung sáu mươi phút; loại giờ huấn luyện viên bận lớp hoặc tập riêng và giờ quá khứ khi bật ràng buộc.
     public async Task<List<PtSlotDto>> ListSlotsAsync(int coachId, int sportId, DateOnly from, DateOnly to, CancellationToken ct)
     {
         if (from == DateOnly.MinValue || to == DateOnly.MaxValue || to < from || to.DayNumber - from.DayNumber > 31) throw new SchedulingException("INVALID_DATE_RANGE", "Khoảng tìm slot tối đa 31 ngày.");
@@ -116,6 +125,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         return slots;
     }
 
+    // Tiếp nhận đặt tập riêng bằng ví hoặc lượt trong gói.
+    // Nghiệp vụ: Xác định hội viên và nguồn trả; ví hoặc gói có khóa chống trùng được bảo vệ lặp, luồng cũ vẫn cho phép thiếu khóa.
     public async Task<PtBookingDto> BookAsync(int actorId, CreatePtBookingRequest request, CancellationToken ct, string? idempotencyKey = null)
     {
         if (!Enum.IsDefined(request.FundingSource)) throw new SchedulingException("INVALID_FUNDING_SOURCE", "Nguồn thanh toán không hợp lệ.");
@@ -126,7 +137,9 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             : await wallet.ExecuteAsync(actorId, "pt-book", idempotencyKey ?? "", request, Work, ct);
     }
 
-    // Called within the existing transaction/idempotency boundary, including counter cash + booking.
+    // Đặt buổi tập riêng trong giao dịch dữ liệu của bên gọi.
+    // Nghiệp vụ: Khóa hội viên, huấn luyện viên, phòng, môn rồi kiểm tra giờ thật và lịch trùng; trả ví thì trừ tiền, trả gói thì trừ một lượt.
+    // Tạo lịch đã xác nhận và thông báo; thiếu gói hợp lệ không tự chuyển sang trừ ví.
     private async Task<PtBookingDto> BookCoreAsync(int actorId, int memberId, CreatePtBookingRequest request, CancellationToken token)
     {
         await LockBookingResourcesAsync(memberId, request.CoachId, request.SportId, request.RoomId, token);
@@ -165,6 +178,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         return ToDto(booking);
     }
 
+    // Hội viên hủy buổi tập riêng của mình hoặc lễ tân hủy hộ.
+    // Nghiệp vụ: Chặn buổi không được hủy; đúng hạn hoàn đúng nguồn, hủy muộn theo cấu hình cho phép.
     public async Task CancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct)
     {
         var actor = await GetActiveActorAsync(actorId, ct);
@@ -189,6 +204,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         }, ct);
     }
 
+    // Đổi giờ tập riêng mà không thu lại.
+    // Nghiệp vụ: Kiểm tra lịch mới và hạn gói cũ, hủy lịch cũ và đánh dấu đã chuyển nguồn trả; lỗi thì giữ lịch cũ.
     public async Task<PtBookingDto> RescheduleAsync(int actorId, int bookingId, ReschedulePtBookingRequest request, CancellationToken ct)
     {
         var actor = await GetActiveActorAsync(actorId, ct);
@@ -212,7 +229,7 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
             CancelBooking(old, actorId, "Rescheduled");
             old.FundingTransferred = true;
             old.IsLateCancellation = !timely;
-            await transaction.SaveChangesAsync(token); // release the active funding allocation; rollback restores it if creation fails
+            await transaction.SaveChangesAsync(token); // Giải phóng phân bổ đang dùng; nếu tạo lịch mới lỗi thì hủy toàn bộ thay đổi để khôi phục.
             var created = NewBooking(actorId, old.MemberId, old.SubscriptionId,
                 new CreatePtBookingRequest(old.CoachId, old.SportId, request.Date, request.StartTime, request.RoomId, old.MemberId));
             created.FundingSource = old.FundingSource; created.FundingOrderId = old.FundingOrderId;
@@ -229,6 +246,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         }, ct);
     }
 
+    // Huấn luyện viên hủy buổi tập riêng được phân công.
+    // Nghiệp vụ: Chặn buổi không được hủy theo trạng thái hoặc điểm danh; hợp lệ thì hoàn đúng nguồn một lần.
     public async Task CoachCancelAsync(int actorId, int bookingId, CancelPtBookingRequest request, CancellationToken ct)
     {
         await transaction.ExecuteAsync(async token =>
@@ -246,15 +265,17 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         }, ct);
     }
 
+    // Quản lý hủy buổi tập riêng thay mặt trung tâm.
+    // Nghiệp vụ: Luôn bảo vệ buổi đã bắt đầu, điểm danh hoặc chốt kể cả khi bỏ qua thời gian; đã hủy không hoàn thêm.
     public async Task ManagerCancelAsync(int actorId, int bookingId, ManagerCancelPtBookingRequest request, CancellationToken ct)
     {
         await transaction.ExecuteAsync(async token =>
         {
             await users.EnsureActiveActorAsync(actorId, UserRole.Manager, token);
             var booking = await LoadAndLockBookingAsync(bookingId, token);
-            // Cancelled bookings of any origin stay unchanged: never refund a transferred/forfeited credit.
+            // Lịch đã hủy luôn được giữ nguyên; không hoàn lại lượt đã chuyển hoặc đã mất do hủy muộn.
             if (booking.Status == BookingStatus.Cancelled) return 0;
-            // Central cancellation always protects started/attended data, including in local test mode.
+            // Trung tâm luôn bảo vệ buổi đã bắt đầu hoặc có điểm danh, kể cả trong chế độ thử nghiệm.
             if (booking.Status != BookingStatus.Confirmed || booking.AttendanceFinalizedAt != null ||
                 clock.ToUtc(booking.Date, booking.StartTime) <= clock.UtcNow || await pt.HasAttendanceAsync(bookingId, token))
                 throw SchedulingException.Conflict("PT_ALREADY_OCCURRED", "Không thể hủy booking đã bắt đầu hoặc ghi nhận điểm danh.");
@@ -266,6 +287,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         }, ct);
     }
 
+    // Chọn gói cấp lượt cho lịch đặt mới.
+    // Nghiệp vụ: Đúng môn, đủ quyền, còn hạn theo quy tắc và còn lượt; ưu tiên hạn kết thúc sớm nhất rồi mã gói.
     private async Task<int> ValidateNewBookingAsync(int memberId, int coachId, int sportId, DateOnly date, TimeOnly start,
         int? roomId, int? ignoredPtId, CancellationToken ct)
     {
@@ -277,6 +300,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         return subscriptionId ?? throw SchedulingException.Conflict("PT_CREDIT_NOT_ELIGIBLE", "Không có gói PT Active đúng bộ môn, còn hạn và còn buổi.");
     }
 
+    // Kiểm tra giờ và tài nguyên trước đặt hoặc đổi buổi tập riêng.
+    // Nghiệp vụ: Giờ tròn, khung sáu mươi phút thuộc giờ rảnh; hội viên, huấn luyện viên, phòng hợp lệ và không trùng lịch.
     private async Task ValidateBookingTargetAsync(int memberId, int coachId, int sportId, DateOnly date, TimeOnly start,
         int? roomId, int? ignoredPtId, CancellationToken ct)
     {
@@ -302,6 +327,8 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
         }
     }
 
+    // Kiểm tra gói gốc tại ngày tập riêng mới.
+    // Nghiệp vụ: Giữ gói đã dùng để trả; không chuyển quyền sang ngày ngoài hạn hoặc gói không còn hợp lệ.
     private async Task ValidateRescheduleSubscriptionAsync(PtBooking booking, DateOnly targetDate, CancellationToken ct)
     {
         if (booking.FundingSource == PtFundingSource.Wallet) return;
@@ -318,12 +345,16 @@ public sealed partial class PtService(IPtRepository pt, IScheduleConflictReposit
                 "Gói PT đã dùng cho booking không còn hợp lệ tại ngày tập mới.");
     }
 
+    // Trừ một lượt tập riêng, bảo vệ khi có yêu cầu đồng thời.
+    // Nghiệp vụ: Chỉ thành công khi còn lượt; yêu cầu khác dùng hết trước thì báo hết lượt tập riêng.
     private async Task ConsumeCreditAsync(int subscriptionId, CancellationToken ct)
     {
         var changed = await subscriptions.TryConsumePtCreditAsync(subscriptionId, ct);
         if (changed != 1) throw SchedulingException.Conflict("PT_CREDIT_EXHAUSTED", "Số buổi PT vừa được sử dụng bởi yêu cầu khác.");
     }
 
+    // Hoàn nguồn đã dùng cho lịch tập riêng.
+    // Nghiệp vụ: Trả ví thì hoàn tiền đơn gốc, trả lượt thì hoàn đúng gói; chặn nguồn đã chuyển và không hoàn lần hai.
     private async Task RefundOnceAsync(PtBooking booking, CancellationToken ct)
     {
         if (booking.FundingTransferred) throw SchedulingException.Conflict("PT_FUNDING_TRANSFERRED", "Nguồn quyền lợi đã chuyển booking mới.");

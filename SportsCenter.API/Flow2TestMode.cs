@@ -62,9 +62,11 @@ public sealed class Flow2TimeRulesController(IFlow2TimeRules timeRules, ISchedul
         "class, room, coach and member validity"
     ];
 
+    // Xem trạng thái áp dụng các ràng buộc thời gian.
     [HttpGet]
     public IActionResult Get() => Ok(Status());
 
+    // Quản lý bật hoặc tắt ràng buộc thời gian để thử nghiệm.
     [HttpPut]
     [Authorize(Roles = "Manager")]
     public async Task<IActionResult> Put(UpdateFlow2TimeRulesRequest request, CancellationToken ct)

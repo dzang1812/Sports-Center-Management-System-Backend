@@ -68,18 +68,23 @@ public sealed class GymAccessService(
     ISchedulingTransaction transaction,
     IAppClock clock) : IGymAccessService
 {
+    // Hội viên lấy thẻ vào trung tâm của mình.
+    // Nghiệp vụ: Kiểm tra hội viên đang hoạt động rồi đọc hoặc cấp thẻ; đây không phải mã điểm danh buổi lớp.
     public Task<GymCardDto> GetMyCardAsync(int memberId, CancellationToken ct) => EnsureCardAsync(memberId, requireActive: true, ct);
 
+    // Lễ tân tìm hội viên từ thông tin hoặc mã thẻ.
+    // Nghiệp vụ: Kiểm tra quyền lễ tân và độ dài từ khóa; giới hạn kết quả để chọn đúng người.
     public async Task<List<GymMemberSearchRow>> SearchMembersAsync(int actorId, string? q, CancellationToken ct)
     {
         await EnsureReceptionistAsync(actorId);
         var term = q?.Trim();
-        // A member id ("7" / "#7") is searchable from one digit; free text needs 2+ characters.
+        // Mã hội viên chỉ cần một chữ số, có thể thêm dấu thăng; tìm bằng chữ cần ít nhất hai ký tự.
         var isId = int.TryParse(term?.TrimStart('#'), out _);
         return string.IsNullOrEmpty(term) || (term.Length < 2 && !isId) ? [] : await gym.SearchMembersAsync(term, 10, ct);
     }
 
-    // Issues the card on first use, same as the member opening it, so the desk can check in members who never did.
+    // Lễ tân lấy thẻ của hội viên được chọn.
+    // Nghiệp vụ: Kiểm tra quyền xem; lần đầu có thể cấp thẻ, sau đó trả quyền vào trung tâm để xác nhận tiếp.
     public async Task<GymCardDto> GetMemberCardAsync(int actorId, int memberId, CancellationToken ct)
     {
         await EnsureReceptionistAsync(actorId);
@@ -103,6 +108,8 @@ public sealed class GymAccessService(
             return BuildCard(member, subscriptions);
         }, ct);
 
+    // Tra cứu mã thẻ trước khi xác nhận vào hoặc ra.
+    // Nghiệp vụ: Kiểm tra người thao tác và chủ thẻ; tra cứu chưa tạo lượt vào trung tâm.
     public async Task<GymCardDto> LookupCardAsync(int actorId, string cardCode, CancellationToken ct)
     {
         await EnsureReceptionistAsync(actorId);
@@ -111,6 +118,8 @@ public sealed class GymAccessService(
         return BuildCard(member, subscriptions);
     }
 
+    // Lễ tân xác nhận hội viên vào trung tâm.
+    // Nghiệp vụ: Khóa hội viên, kiểm tra quyền, gói và lượt đang mở; nếu đã vào thì trả kết quả cũ, không mở lượt thứ hai.
     public async Task<GymScanResult> CheckInAsync(int actorId, GymScanRequest request, CancellationToken ct)
     {
         await EnsureReceptionistAsync(actorId);
@@ -149,6 +158,8 @@ public sealed class GymAccessService(
         }, ct);
     }
 
+    // Đóng lượt vào trung tâm đang mở của hội viên.
+    // Nghiệp vụ: Kiểm tra lễ tân và thẻ, khóa hội viên rồi ghi giờ ra đúng lượt; không dùng lượt tập riêng.
     public async Task<GymScanResult> CheckOutAsync(int actorId, GymScanRequest request, CancellationToken ct)
     {
         await EnsureReceptionistAsync(actorId);
@@ -173,14 +184,16 @@ public sealed class GymAccessService(
         }, ct);
     }
 
+    // Đọc lịch sử vào/ra theo quyền.
+    // Nghiệp vụ: Hội viên chỉ xem mình; nhân viên xem theo quyền, có khoảng ngày và phân trang.
     public async Task<GymVisitHistoryResponse> ListVisitsAsync(
         int actorId, int? memberId, DateOnly from, DateOnly to, int page, int pageSize, CancellationToken ct)
     {
         ValidateRange(from, to);
         var actor = await users.GetByIdAsync(actorId)
             ?? throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
-        // Member: always scoped to self. Receptionist/Manager: a given memberId scopes to that member,
-        // null lists every member's visits (the reception's today-feed).
+        // Hội viên luôn chỉ xem lịch sử của mình; lễ tân hoặc quản lý có thể chọn một hội viên,
+        // hoặc không chọn để xem lượt của mọi hội viên, phục vụ danh sách tiếp đón trong ngày.
         int? targetId = actor.Role switch
         {
             UserRole.Member when memberId is null || memberId == actorId => actorId,

@@ -19,16 +19,19 @@ public record CourseSetupIssue(string Field, string ErrorCode, string Message);
 
 public sealed partial class Flow2CommerceService
 {
-    // Preview is read-only and holds no reservation. Create repeats every check under resource locks.
+    // Xem trước lịch và học phí nguyên khóa.
+    // Nghiệp vụ: Kiểm tra quyền quản lý, tài nguyên, khoảng lịch và lịch trùng; chỉ tính trước, chưa ghi dữ liệu hay giữ chỗ.
     public async Task<CoursePreview> PreviewCourseAsync(int actor, CreateCourseRequest request, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actor, UserRole.Manager, ct);
         return await BuildCoursePlanAsync(request, ct);
     }
 
+    // Tạo nguyên khóa cùng toàn bộ buổi học.
+    // Nghiệp vụ: Khóa bộ môn, huấn luyện viên và phòng rồi kiểm tra cả đợt; tạo đủ lịch và mở bán theo yêu cầu trong cùng giao dịch dữ liệu.
     public Task<CreatedCourse> CreateCourseAsync(int actor, CreateCourseRequest request, string key, CancellationToken ct)
     {
-        // Authorization also runs on replay; the shared commerce gateway handles key/payload matching.
+        // Vẫn kiểm tra quyền khi nhận lại yêu cầu cũ; kiểm tra khóa chống trùng và nội dung yêu cầu trước khi trả kết quả.
         return CreateAuthorizedAsync();
         async Task<CreatedCourse> CreateAuthorizedAsync()
         {
@@ -76,6 +79,8 @@ public sealed partial class Flow2CommerceService
         }
     }
 
+    // Tính các buổi từ số tuần và thứ đã chọn.
+    // Nghiệp vụ: Sinh buổi trong khoảng từ ngày bắt đầu đến trước ngày bắt đầu cộng số tuần nhân bảy; kiểm tra học phí, hạn đăng ký, môn, huấn luyện viên và phòng.
     private async Task<CoursePreview> BuildCoursePlanAsync(CreateCourseRequest r, CancellationToken ct)
     {
         static void Invalid(string code, string message, string field) => throw new SchedulingException(code, message, 400, new { field });
@@ -121,6 +126,8 @@ public sealed partial class Flow2CommerceService
         return plan;
     }
 
+    // Kiểm tra thời điểm được mở đăng ký khóa.
+    // Nghiệp vụ: Phải còn trước hạn đăng ký và buổi đầu; các mốc này độc lập với công tắc bỏ qua thời gian.
     private void RequireOpeningWindow(CoursePreview plan)
     {
         if (clock.UtcNow >= plan.EnrollmentClosesAt)

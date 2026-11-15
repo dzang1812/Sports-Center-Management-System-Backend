@@ -16,6 +16,8 @@ internal record PtCounterIntent(int PaymentId, CreatePtBookingRequest Booking);
 
 public sealed partial class PtService
 {
+    // Lễ tân thu tiền mặt hoặc tạo mã chuyển khoản cho buổi tập riêng.
+    // Nghiệp vụ: Kiểm tra giờ tập và giá; tiền mặt ghi nạp rồi đặt trong cùng giao dịch dữ liệu, chuyển khoản lưu ý định đặt để chờ tiền thật.
     public async Task<PtCounterCheckoutDto> CounterCheckoutAsync(int actorId, PtCounterCheckoutRequest request,
         string key, CancellationToken ct)
     {
@@ -60,7 +62,7 @@ public sealed partial class PtService
                 return new PtCounterDraft(payment.Id, result);
             }
 
-            // Bind one payment to an immutable server-side booking intent. No new schema/module.
+            // Gắn một thanh toán với ý định đặt lịch bất biến do máy chủ lưu; không thêm cấu trúc dữ liệu mới.
             var json = JsonSerializer.Serialize(new PtCounterIntent(payment.Id, booking));
             commerceRepo.Add(new CommerceRequest { ActorId = actorId, Operation = "pt-counter-payment",
                 Key = payment.Id.ToString(), PayloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))), ResultJson = json });
@@ -73,6 +75,8 @@ public sealed partial class PtService
         return new(draft.PaymentId, draft.Booking, paymentDto);
     }
 
+    // Hoàn tất đặt buổi tập riêng sau xác nhận chuyển khoản.
+    // Nghiệp vụ: Giao dịch đã trả tiền, đúng lễ tân, hội viên và ý định đặt; khóa chống trùng ổn định, không tự xác nhận hoặc cộng tiền lại.
     public async Task<PtBookingDto> CompleteCounterCheckoutAsync(int actorId, int paymentId, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actorId, UserRole.Receptionist, ct);
@@ -90,8 +94,8 @@ public sealed partial class PtService
             throw SchedulingException.Conflict("PAYMENT_NOT_PAID", payment.Status == PaymentStatus.Pending
                 ? "Chưa nhận được xác nhận chuyển khoản từ PayOS. Khách thanh toán xong, chờ vài giây rồi bấm Hoàn thành."
                 : "Thanh toán đã thất bại hoặc bị hủy; chưa tạo booking PT.");
-        // Webhook alone credits money; this button cannot mark a transfer Paid or credit twice.
-        // Stable payment-scoped replay prevents concurrent/repeated completion from charging twice.
+        // Chỉ thông báo từ cổng thanh toán được cộng ví; nút hoàn tất không tự xác nhận chuyển khoản hay cộng tiền hai lần.
+        // Khóa chống trùng theo thanh toán ngăn yêu cầu hoàn tất đồng thời hoặc gửi lặp thu tiền hai lần.
         return await BookAsync(actorId, intent.Booking, ct, $"pt-counter-payment:{paymentId}");
     }
 }

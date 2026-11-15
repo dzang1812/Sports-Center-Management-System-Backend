@@ -58,7 +58,8 @@ internal static class Staff
 public sealed class SupportService(IFrontDeskRepository repo, IUserRepository users, INotificationRepository notifications,
     IAuditLogRepository audit, IAppClock clock)
 {
-    // Member submits their own; front-desk staff log one on behalf of a member (MemberId required) and take it on.
+    // Tạo yêu cầu hỗ trợ cho hội viên.
+    // Nghiệp vụ: Hội viên tạo yêu cầu chờ xử lý cho mình; nhân viên ghi nhận hộ thì nhận xử lý và gửi thông báo phù hợp.
     public async Task<SupportRequestDto> CreateAsync(int actorId, CreateSupportRequest r, CancellationToken ct)
     {
         var actor = await Staff.EnsureAsync(users, actorId, UserRole.Member, UserRole.Receptionist, UserRole.Manager);
@@ -77,7 +78,7 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         repo.AddSupportRequest(request);
         if (staff) Notify(request, actorId, $"Trung tâm đã ghi nhận yêu cầu của bạn: {request.Subject}.");
         else
-            // Member-submitted requests land in the front-desk queue: ping every active receptionist.
+            // Yêu cầu do hội viên gửi sẽ thông báo tới mọi lễ tân có tài khoản đang hoạt động.
             foreach (var receptionistId in await repo.ListActiveReceptionistIdsAsync(ct))
                 notifications.Add(new Notification
                 {
@@ -88,6 +89,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         return ToDto((await repo.GetSupportRequestAsync(request.Id, ct))!);
     }
 
+    // Hội viên xem yêu cầu của mình.
+    // Nghiệp vụ: Kiểm tra hội viên đang hoạt động và phân trang; không cho dò yêu cầu của tài khoản khác.
     public async Task<PagedResponse<SupportRequestDto>> ListMineAsync(int memberId, int page, int pageSize, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, memberId, UserRole.Member);
@@ -96,6 +99,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         return new(items.Select(ToDto).ToList(), total, page, pageSize);
     }
 
+    // Nhân viên lọc hàng đợi hỗ trợ.
+    // Nghiệp vụ: Chỉ lễ tân hoặc quản lý; lọc trạng thái, loại, nội dung và phân trang.
     public async Task<PagedResponse<SupportRequestDto>> ListAsync(int actorId, SupportStatus? status, SupportCategory? category, string? q,
         int page, int pageSize, CancellationToken ct)
     {
@@ -105,6 +110,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         return new(items.Select(ToDto).ToList(), total, page, pageSize);
     }
 
+    // Đếm các nhóm hỗ trợ cần xử lý.
+    // Nghiệp vụ: Chỉ nhân viên xem tổng yêu cầu chờ xử lý, đang xử lý và chờ hội viên phản hồi.
     public async Task<SupportSummaryDto> SummaryAsync(int actorId, CancellationToken ct)
     {
         await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
@@ -113,6 +120,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
             counts.GetValueOrDefault(SupportStatus.WaitingForMember));
     }
 
+    // Đọc yêu cầu và tin nhắn được phép xem.
+    // Nghiệp vụ: Kiểm tra chủ sở hữu và quyền; dữ liệu trả cho hội viên không chứa ghi chú nội bộ.
     public async Task<SupportDetailDto> GetAsync(int actorId, int id, CancellationToken ct)
     {
         var (actor, request) = await LoadAsync(actorId, id, ct);
@@ -122,6 +131,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
             m.IsInternal, m.CreatedAt)).ToList());
     }
 
+    // Trả lời hoặc ghi chú nội bộ hỗ trợ.
+    // Nghiệp vụ: Hội viên không ghi nội bộ; nhân viên trả lời công khai thì chờ hội viên, hội viên phản hồi thì đưa lại hàng đợi.
     public async Task<SupportDetailDto> ReplyAsync(int actorId, int id, ReplySupportRequest r, CancellationToken ct)
     {
         var (actor, request) = await LoadAsync(actorId, id, ct);
@@ -149,12 +160,13 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
         return await GetAsync(actorId, id, ct);
     }
 
+    // Đóng, mở lại hoặc đổi trạng thái hỗ trợ.
+    // Nghiệp vụ: Nhân viên quản lý trạng thái; hội viên chỉ đóng hoặc mở lại theo quy tắc, không tự hoàn tiền hay hủy lịch.
     public async Task<SupportRequestDto> UpdateStatusAsync(int actorId, int id, SupportStatus status, CancellationToken ct)
     {
         var (actor, request) = await LoadAsync(actorId, id, ct);
         if (request.Status == status) return ToDto(request);
         var staff = actor.Role != UserRole.Member;
-        // Members can only close their request or reopen a finished one.
         if (!staff && !(status == SupportStatus.Closed ||
             (status == SupportStatus.Open && request.Status is SupportStatus.Resolved or SupportStatus.Closed)))
             throw SchedulingException.Forbidden("SUPPORT_STATUS_NOT_ALLOWED", "Bạn chỉ có thể đóng hoặc mở lại yêu cầu.");
@@ -178,7 +190,7 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
     {
         var actor = await Staff.EnsureAsync(users, actorId, UserRole.Member, UserRole.Receptionist, UserRole.Manager);
         var request = await repo.GetSupportRequestAsync(id, ct);
-        // Same 404 for "missing" and "someone else's" so members can't probe ids.
+        // Cả yêu cầu không tồn tại và của người khác đều báo không tìm thấy, tránh dò mã yêu cầu.
         if (request is null || (actor.Role == UserRole.Member && request.MemberId != actorId))
             throw SchedulingException.NotFound("SUPPORT_NOT_FOUND", "Không tìm thấy yêu cầu hỗ trợ.");
         return (actor, request);
@@ -205,7 +217,8 @@ public sealed class SupportService(IFrontDeskRepository repo, IUserRepository us
 
 public sealed class PaymentHistoryService(IFrontDeskRepository repo, IUserRepository users)
 {
-    // Members only ever see their own; staff must name the member.
+    // Tra lịch sử thanh toán theo hội viên.
+    // Nghiệp vụ: Hội viên xem mình; nhân viên phải chỉ rõ hội viên. Trả danh sách thanh toán phân trang, khác sổ biến động ví.
     public async Task<PagedResponse<PaymentDto>> ListAsync(int actorId, int? memberId, int page, int pageSize, CancellationToken ct)
     {
         var actor = await Staff.EnsureAsync(users, actorId, UserRole.Member, UserRole.Receptionist, UserRole.Manager);
@@ -219,6 +232,8 @@ public sealed class PaymentHistoryService(IFrontDeskRepository repo, IUserReposi
 
 public sealed class ReportTrendService(IFrontDeskRepository repo, IUserRepository users, IAppClock clock)
 {
+    // Tính xu hướng báo cáo theo ngày hoặc tháng.
+    // Nghiệp vụ: Kiểm tra quyền quản lý và khoảng ngày; đổi mốc theo giờ Việt Nam, điền cả kỳ không có dữ liệu.
     public async Task<List<ReportTrendPoint>> TrendAsync(int actorId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -245,12 +260,14 @@ public sealed class ReportTrendService(IFrontDeskRepository repo, IUserRepositor
         return periods.Select(p => new ReportTrendPoint(p, revenue.GetValueOrDefault(p), members.GetValueOrDefault(p), bookings.GetValueOrDefault(p))).ToList();
     }
 
+    // Tính tình hình lấp đầy lớp/khóa.
+    // Nghiệp vụ: Kiểm tra quyền quản lý, phân biệt cách đăng ký lớp và tránh chia cho không khi tính tỷ lệ.
     public async Task<List<ClassFillDto>> ClassFillAsync(int actorId, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
         return (await repo.ListClassFillAsync(ct)).Select(c =>
         {
-            // Course classes fill by enrollment; per-session classes fill by seats booked across their sessions.
+            // Khóa nguyên khóa tính theo số người đăng ký; lớp theo buổi tính theo chỗ đã đặt của từng buổi.
             decimal? rate = c.BookingMode == ClassBookingMode.CourseEnrollment
                 ? c.Capacity > 0 ? (decimal)c.ActiveEnrollments / c.Capacity : null
                 : c.Sessions * c.Capacity > 0 ? (decimal)c.ActiveBookings / (c.Sessions * c.Capacity) : null;
@@ -263,6 +280,8 @@ public sealed class ReportTrendService(IFrontDeskRepository repo, IUserRepositor
 public sealed class CoachMessageService(IFrontDeskRepository repo, IUserRepository users, INotificationRepository notifications,
     IAuditLogRepository audit, IAppClock clock)
 {
+    // Huấn luyện viên gửi lời nhắn hoặc bài tập cho học viên.
+    // Nghiệp vụ: Chỉ gửi cho lớp hoặc buổi mình phụ trách; lấy đúng học viên, lưu lời nhắn chung hoặc bài tập cùng thông báo và nhật ký.
     public async Task<CoachMessageResult> SendAsync(int coachId, CoachMessageRequest r, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, coachId, UserRole.Coach);
@@ -290,6 +309,8 @@ public sealed class CoachMessageService(IFrontDeskRepository repo, IUserReposito
 
 public sealed class ExpiringSubscriptionService(IFrontDeskRepository repo, IUserRepository users, IAppClock clock)
 {
+    // Nhân viên xem gói sắp hết hạn.
+    // Nghiệp vụ: Dùng ngày Việt Nam, tra cứu tối đa ba mươi ngày để lấy gói sắp hết hạn đủ điều kiện.
     public async Task<List<ExpiringSubscriptionRow>> ListAsync(int actorId, int days, CancellationToken ct)
     {
         await Staff.EnsureAsync(users, actorId, UserRole.Receptionist, UserRole.Manager);
@@ -302,7 +323,7 @@ public sealed class SubscriptionExpiryNotifier(IFrontDeskRepository repo, INotif
 {
     public const int DaysAhead = 3;
 
-    // Idempotent: one notification per subscription end date, keyed by DeduplicationKey.
+    // Mỗi gói và ngày hết hạn chỉ gửi một thông báo nhờ khóa chống trùng.
     public async Task<int> RunAsync(CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(clock.LocalNow);

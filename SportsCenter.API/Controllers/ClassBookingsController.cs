@@ -10,9 +10,11 @@ public sealed class ClassBookingsController(IClassBookingService service) : Cont
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    // Đặt một buổi lớp bằng quyền của gói đã mua.
     [HttpPost("api/sessions/{sessionId:int}/bookings")]
     public Task<BookingDto> Book(int sessionId, BookForMemberRequest request, CancellationToken ct) => service.BookAsync(ActorId, sessionId, request, ct);
 
+    // Hủy lịch đặt lớp lẻ, giữ lịch sử.
     [HttpDelete("api/bookings/{bookingId:int}")]
     public async Task<IActionResult> Cancel(int bookingId, [FromQuery] string? reason, CancellationToken ct)
     { await service.CancelAsync(ActorId, bookingId, reason, ct); return NoContent(); }

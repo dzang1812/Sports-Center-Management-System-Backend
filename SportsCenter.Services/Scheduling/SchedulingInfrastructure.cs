@@ -64,9 +64,13 @@ public sealed class VietnamClock : IAppClock
 
 public static class SchedulingRules
 {
+    // Xét có còn đủ thời gian hủy đúng hạn.
+    // Nghiệp vụ: Thời gian còn lại tới giờ bắt đầu lớn hơn hoặc bằng hạn yêu cầu; đúng ranh giới vẫn là đúng hạn.
     public static bool MeetsCancellationCutoff(DateTime startUtc, DateTime nowUtc, int cutoffHours) =>
         startUtc - nowUtc >= TimeSpan.FromHours(cutoffHours);
 
+    // Kiểm tra cửa sổ được đặt lịch.
+    // Nghiệp vụ: Chặn khi đã tới mốc đóng hoặc còn quá sớm so với số ngày cho mở đặt.
     public static void EnsureBookingWindow(DateTime startUtc, DateTime nowUtc, int? opensDaysBefore, int closesMinutesBefore)
     {
         if (startUtc <= nowUtc.AddMinutes(closesMinutesBefore))
@@ -79,6 +83,8 @@ public static class SchedulingRules
         DateOnly secondDate, TimeOnly secondStart, TimeOnly secondEnd) =>
         firstDate == secondDate && firstStart < secondEnd && secondStart < firstEnd;
 
+    // Xét gói có cấp quyền cho một ngày tập hay không.
+    // Nghiệp vụ: Kiểm tra trạng thái, môn, thanh toán chờ và quyền lớp hoặc tập riêng; bỏ qua thời gian chỉ nới ngày cho gói theo luồng cũ, không nới gói mua bằng ví.
     public static bool SubscriptionCovers(SchedulingSubscriptionSnapshot subscription, int sportId, DateOnly activityDate,
         bool needsClass = false, bool needsPt = false, bool enforceTimeRules = true) =>
         (subscription.Status == SubscriptionStatus.Active ||
@@ -90,7 +96,7 @@ public static class SchedulingRules
         (!needsPt || subscription.PtSessionCredits > 0 && subscription.RemainingPtSessions > 0);
 }
 
-// Write helpers over the repositories so services never touch the DbContext.
+// Các hàm ghi qua kho truy xuất dữ liệu để tầng xử lý nghiệp vụ không truy cập trực tiếp ngữ cảnh cơ sở dữ liệu.
 public static class SchedulingRecords
 {
     public static async Task EnsureActiveActorAsync(this IScheduleUserRepository users, int actorId, UserRole role, CancellationToken ct)

@@ -44,6 +44,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     IScheduleUserRepository users, ISchedulingSubscriptionRepository subscriptions, IAuditLogRepository audit, INotificationRepository notifications,
     ISchedulingTransaction transaction, IAppClock clock, IFlow2TimeRules timeRules) : IClassScheduleService
 {
+    // Quản lý xem danh sách lớp.
+    // Nghiệp vụ: Lọc và phân trang; giữ cách đăng ký để phân biệt lớp theo gói với nguyên khóa trả phí.
     public async Task<PagedResponse<ClassDto>> ListClassesAsync(int? sportId, ClassStatus? status, string? q, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
@@ -51,6 +53,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         return new(rows.Select(ToClassDto).ToList(), total, page, pageSize);
     }
 
+    // Lấy lớp nổi bật cho giao diện giới thiệu.
+    // Nghiệp vụ: Giới hạn số kết quả và dùng ngày Việt Nam để đọc danh sách phù hợp.
     public async Task<List<PublicClassDto>> ListFeaturedClassesAsync(int count, CancellationToken ct)
     {
         count = Math.Clamp(count, 1, 12);
@@ -59,6 +63,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         return rows.Select(ToPublicClassDto).ToList();
     }
 
+    // Lấy danh sách lớp công khai.
+    // Nghiệp vụ: Lọc theo môn và cấp độ qua kho truy xuất dữ liệu; chỉ giới thiệu, chưa tạo lịch đặt.
     public async Task<List<PublicClassDto>> ListPublicClassesAsync(int? sportId, Level? level, CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(clock.LocalNow);
@@ -69,6 +75,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
     private static PublicClassDto ToPublicClassDto(Class x) =>
         new(x.Id, x.Name, x.Sport.Name, x.Level, x.Description, x.StartDate, x.EndDate, x.Room.ImageUrls);
 
+    // Tạo thông tin lớp và tài nguyên phụ trách.
+    // Nghiệp vụ: Kiểm tra quản lý, môn lớp, phòng, huấn luyện viên, sĩ số và khoảng ngày; tạo trọn khóa dùng luồng tạo nguyên khóa riêng.
     public async Task<ClassDto> CreateClassAsync(int actorId, UpsertClassRequest request, CancellationToken ct)
     {
         ValidateClassDates(request);
@@ -94,6 +102,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         }, ct);
     }
 
+    // Sửa cấu hình lớp hiện có.
+    // Nghiệp vụ: Khóa tài nguyên và kiểm tra dữ liệu liên quan; bảo vệ quyền đã công bố/bán và các lịch đang dùng.
     public async Task<ClassDto> UpdateClassAsync(int actorId, int id, UpsertClassRequest request, CancellationToken ct)
     {
         ValidateClassDates(request);
@@ -169,6 +179,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         }, ct);
     }
 
+    // Sinh lịch lặp cho khoảng ngày của lớp.
+    // Nghiệp vụ: Sinh lịch theo thứ, bỏ ngày đã có; một lịch trùng chặn cả đợt, khóa nguyên khóa phải ở trạng thái nháp.
     public async Task<GenerateSessionsResponse> GenerateAsync(int actorId, int classId, GenerateSessionsRequest request, CancellationToken ct)
     {
         if (request.DaysOfWeek.Length == 0 || request.DaysOfWeek.Distinct().Count() != request.DaysOfWeek.Length ||
@@ -214,6 +226,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         }, ct);
     }
 
+    // Đổi huấn luyện viên phụ trách và cập nhật lịch đủ điều kiện.
+    // Nghiệp vụ: Chỉ chuyển buổi tương lai phù hợp chưa ghi nhận; giữ phân công riêng và kiểm tra lịch huấn luyện viên mới.
     public async Task<ClassDto> AssignCoachAsync(int actorId, int classId, AssignCoachRequest request, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
         {
@@ -232,7 +246,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             var sessions = new List<ClassSession>();
             foreach (var candidate in candidates.Where(x => x.CoachId == item.CoachId))
                 if (candidate.AttendanceFinalizedAt == null && !await classes.HasAnyAttendanceAsync(candidate.Id, token))
-                    sessions.Add(candidate); // preserve explicit overrides and already-recorded attendance
+                    sessions.Add(candidate); // Giữ phân công riêng từng buổi và dữ liệu điểm danh đã ghi.
 
             var affectedMembers = new HashSet<int>();
             foreach (var session in sessions.Where(x => x.CoachId != request.CoachId))
@@ -249,7 +263,7 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             if (previousCoachId is { } oldCoachId && oldCoachId != request.CoachId)
                 notifications.AddNotification(oldCoachId, actorId, NotificationType.ScheduleChange, "Thay đổi phân công lớp",
                     $"Bạn không còn được phân công lớp {item.Name}.", $"class:{classId}:coach-revision:{item.NotificationRevision}:removed:{oldCoachId}");
-            // One notification per affected member per assignment revision, even across multiple sessions.
+            // Mỗi lần đổi phân công chỉ thông báo một lần cho từng hội viên bị ảnh hưởng, kể cả có nhiều buổi.
             foreach (var memberId in affectedMembers)
                 notifications.AddNotification(memberId, actorId, NotificationType.ScheduleChange, "Thay đổi huấn luyện viên",
                     $"Huấn luyện viên của các buổi bạn đã đặt trong lớp {item.Name} đã thay đổi.",
@@ -258,6 +272,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
             return await GetClassAsync(classId, token);
         }, ct);
 
+    // Lấy các buổi học và số chỗ còn lại.
+    // Nghiệp vụ: Lọc theo ngày, môn, huấn luyện viên, lớp, cấp độ và phân trang; trả cách đăng ký để giao diện chọn đúng luồng.
     public async Task<PagedResponse<SessionDto>> ListSessionsAsync(int? sportId, DateOnly? from, DateOnly? to, int? coachId, Level? level, int? classId, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Page(page, pageSize);
@@ -269,6 +285,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         return new(items, total, page, pageSize);
     }
 
+    // Dời một buổi lớp hoặc đổi phòng.
+    // Nghiệp vụ: Kiểm tra trạng thái, điểm danh, thời lượng, quyền khóa và lịch trùng của hội viên, huấn luyện viên, phòng; lỗi thì giữ lịch cũ.
     public async Task<SessionDto> UpdateSessionAsync(int actorId, int sessionId, UpdateSessionRequest request, CancellationToken ct)
     {
         if (request.StartTime >= request.EndTime) throw new SchedulingException("INVALID_TIME_RANGE", "Giờ kết thúc phải sau giờ bắt đầu; không hỗ trợ lịch qua đêm.");
@@ -335,6 +353,8 @@ public sealed class ClassScheduleService(IClassRepository classes, ICatalogRepos
         }, ct);
     }
 
+    // Hủy buổi lớp lẻ và lịch đặt liên quan.
+    // Nghiệp vụ: Chặn khi đã điểm danh hoặc sai trạng thái; nguyên khóa phải chọn học bù hoặc hoàn qua luồng quản lý khóa.
     public async Task CancelSessionAsync(int actorId, int sessionId, CancelSessionRequest request, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
         {

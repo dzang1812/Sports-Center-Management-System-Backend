@@ -20,6 +20,8 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
     IOptions<SchedulingOptions> options) : IClassBookingService
 {
     private readonly SchedulingOptions settings = options.Value;
+    // Đặt một buổi lớp bằng quyền của gói đã mua.
+    // Nghiệp vụ: Khóa tài nguyên, kiểm tra gói, môn, ngày, chỗ và lịch trùng; nguyên khóa phải mua bằng đăng ký toàn khóa.
     public async Task<BookingDto> BookAsync(int actorId, int sessionId, BookForMemberRequest request, CancellationToken ct)
     {
         var memberId = await ResolveTargetMemberAsync(actorId, request.MemberId, ct);
@@ -74,6 +76,8 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
         }, ct);
     }
 
+    // Hủy lịch đặt lớp lẻ, giữ lịch sử.
+    // Nghiệp vụ: Kiểm tra chủ sở hữu, hạn hủy và trạng thái; không cho xóa riêng lịch đặt thuộc nguyên khóa.
     public async Task CancelAsync(int actorId, int bookingId, string? reason, CancellationToken ct)
     {
         var actor = await GetActiveActorAsync(actorId, ct);
@@ -88,7 +92,7 @@ public sealed class ClassBookingService(IClassRepository classes, IScheduleConfl
             await transaction.LockAsync([new(ScheduleResourceType.Member, snapshot.MemberId), new(ScheduleResourceType.Session, snapshot.SessionId)], token);
             var booking = await classes.GetBookingWithSessionAsync(bookingId, token);
             if (booking.EnrollmentId != null) throw SchedulingException.Conflict("CANCEL_WHOLE_ENROLLMENT", "Nghỉ một buổi không hoàn tiền; muốn hủy khóa hãy dùng enrollment.");
-            if (booking.Status == BookingStatus.Cancelled) return 0; // idempotent: repeated DELETE is 204
+            if (booking.Status == BookingStatus.Cancelled) return 0; // Gọi hủy lại không xử lý thêm, vẫn trả kết quả thành công không có nội dung.
             if (booking.Status == BookingStatus.Completed) throw SchedulingException.Conflict("BOOKING_COMPLETED", "Không thể hủy booking đã hoàn tất.");
             var startUtc = clock.ToUtc(booking.Session.Date, booking.Session.StartTime);
             if ((timeRules.EnforceTimeRules && startUtc <= clock.UtcNow) || booking.Session.AttendanceFinalizedAt != null ||

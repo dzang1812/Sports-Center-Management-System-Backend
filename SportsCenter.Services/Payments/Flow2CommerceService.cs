@@ -18,11 +18,14 @@ public record PtPriceRequest(decimal Price);
 
 public static class CommercePolicy
 {
-    // These are financial/entitlement boundaries, deliberately independent of local time-rule bypass.
+    // Chặn khi chạm mốc thời hạn thương mại.
+    // Nghiệp vụ: Từ chối khi đã đến hạn chót; chế độ bỏ qua thời gian không nới điều kiện mua khóa.
     public static void RequireBefore(DateTime now, DateTime cutoff)
     {
         if (now >= cutoff) throw SchedulingException.Conflict("COURSE_ENROLLMENT_CLOSED", "Đã hết hạn đăng ký khóa; không nhận học viên giữa khóa.");
     }
+    // Chia thực trả thành quyền lợi tiền từng buổi.
+    // Nghiệp vụ: Chia tiền theo đồng nguyên, phần dư phân cho các buổi đầu để tổng phân bổ đúng số tiền đã trả.
     public static decimal[] Allocate(decimal paid, int count)
     {
         WalletService.ValidateMoney(paid);
@@ -38,8 +41,12 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
     INotificationRepository notifications, IAppClock clock, MemberTierService tiers, VoucherService vouchers)
 {
 
+    // Đọc giá tập riêng lẻ của các môn đủ điều kiện.
+    // Nghiệp vụ: Hiển thị giá trước khi chọn buổi; lúc thanh toán vẫn đọc và đối chiếu giá thật.
     public async Task<object> PtPricesAsync(CancellationToken ct) => await repo.ListPtPricesAsync(ct);
 
+    // Cấu hình giá tập riêng lẻ theo môn.
+    // Nghiệp vụ: Chỉ quản lý có tài khoản hoạt động; số tiền nguyên dương, khóa bộ môn và chống xử lý lặp.
     public Task<int> SetPtPriceAsync(int actor, int sportId, PtPriceRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"pt-price:{sportId}", key, request, async token =>
         {
@@ -53,6 +60,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return sportId;
         }, ct);
 
+    // Lấy danh sách khóa và khả năng đăng ký.
+    // Nghiệp vụ: Quản lý thấy cả khóa chưa công bố; xét mở bán, thời hạn, quyền tổ chức lớp và chỗ trống.
     public async Task<object> CoursesAsync(int actor, CancellationToken ct)
     {
         var user = await ActiveAsync(actor, ct);
@@ -66,6 +75,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         });
     }
 
+    // Đọc lịch toàn khóa và điều khoản trước mua.
+    // Nghiệp vụ: Ẩn khóa nháp với người không phải quản lý; trả lịch từng buổi, lỗi cấu hình và chính sách hủy.
     public async Task<object> CourseAsync(int actor, int id, CancellationToken ct)
     {
         var user = await ActiveAsync(actor, ct);
@@ -79,6 +90,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             policy = "Hủy toàn khóa trước khai giảng: hoàn số tiền thực trả chưa hoàn. Sau khai giảng: liên hệ hỗ trợ. Nghỉ một buổi không hoàn tiền. Trung tâm hủy: bù buổi hoặc hoàn phân bổ snapshot." };
     }
 
+    // Đọc đăng ký nguyên khóa theo phạm vi người xem.
+    // Nghiệp vụ: Hội viên chỉ xem mình; nhân viên chọn hội viên hoặc khóa theo quyền, kèm số tiền thực trả và đã hoàn.
     public async Task<object> EnrollmentsAsync(int actor, int? memberId, int? courseId, CancellationToken ct)
     {
         var user = await ActiveAsync(actor, ct);
@@ -86,6 +99,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         return await repo.ListPaidEnrollmentsAsync(target, courseId, ct);
     }
 
+    // Sửa giá và số buổi khóa chưa có người mua.
+    // Nghiệp vụ: Chặn khóa đã có người mua; kiểm tra hạn đăng ký rồi đưa về nháp, cần kiểm tra lại khi mở bán.
     public Task<int> TermsAsync(int actor, int id, CourseTermsRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-terms:{id}", key, request, async token =>
         {
@@ -103,11 +118,13 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             if (request.EnrollmentClosesAt <= clock.UtcNow) throw new SchedulingException("INVALID_ENROLLMENT_CUTOFF", "Hạn đăng ký phải ở tương lai.");
             audit.AddAudit(actor, "Course.Terms", nameof(Class), id, new { Old = c.EnrollmentClosesAt, request });
             c.CourseFee = request.Fee; c.ExpectedSessions = request.ExpectedSessions; c.EnrollmentClosesAt = request.EnrollmentClosesAt;
-            // Changes require an explicit publish validation again.
+            // Thay đổi điều khoản phải kiểm tra lại trước khi mở bán.
             c.Status = ClassStatus.Draft; c.PublishedAt = null; c.CourseStartsAt = null;
             return id;
         }, ct);
 
+    // Mở hoặc đóng nhận học viên của khóa.
+    // Nghiệp vụ: Mở bán cần đủ lịch, tài nguyên và còn hạn; đóng nhận đăng ký không hủy lịch đặt hay hoàn tiền.
     public Task<int> PublishAsync(int actor, int id, CoursePublishRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-publish:{id}", key, request, async token =>
         {
@@ -127,6 +144,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return id;
         }, ct);
 
+    // Điều chỉnh hạn đăng ký còn hợp lệ.
+    // Nghiệp vụ: Hạn cũ chưa qua; hạn mới phải ở tương lai theo giờ quốc tế, không sau buổi đầu và không nhận thêm giữa khóa.
     public Task<int> CutoffAsync(int actor, int id, CourseCutoffRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-cutoff:{id}", key, request, async token =>
         {
@@ -142,6 +161,9 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return id;
         }, ct);
 
+    // Mua nguyên khóa bằng ví.
+    // Nghiệp vụ: Khóa tài nguyên rồi kiểm tra mở bán, hạn đăng ký, khai giảng, sức chứa và toàn bộ lịch hội viên.
+    // Trừ ví một lần, lưu điều khoản lúc mua, phân bổ quyền lợi và tạo đủ lịch đặt trong cùng giao dịch dữ liệu.
     public Task<EnrollmentResult> EnrollAsync(int actor, int id, BuyRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-buy:{id}", key, request, async token =>
         {
@@ -163,7 +185,7 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
                 if (await conflicts.HasMemberConflictAsync(member, s.Date, s.StartTime, s.EndTime, null, token))
                     throw SchedulingException.Conflict("MEMBER_SCHEDULE_CONFLICT", "Hội viên trùng lịch trong khóa.");
             }
-            // Boundary is checked after waiting for locks and all validation, immediately before debit.
+            // Kiểm tra lại hạn sau khi chờ khóa và xác thực dữ liệu, ngay trước khi trừ ví.
             CommercePolicy.RequireBefore(clock.UtcNow, c.EnrollmentClosesAt.Value);
             EnsureExpectedPrice(request.ExpectedPrice, c.CourseFee);
             var order = await PurchaseAsync(member, actor, CommerceOrderKind.Course, c.CourseFee,
@@ -188,6 +210,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return new EnrollmentResult(enrollment.Id, order.Id, order.PaidAmount, sessions.Count);
         }, ct);
 
+    // Hủy đăng ký nguyên khóa trước khai giảng.
+    // Nghiệp vụ: Xét giờ khai giảng thay vì hạn đăng ký; chặn khi đã điểm danh, hoàn phần chưa hoàn và hủy lịch tương lai.
     public Task<int> CancelEnrollmentAsync(int actor, int enrollmentId, string reason, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-cancel-enrollment:{enrollmentId}", key, new { reason }, async token =>
         {
@@ -198,7 +222,6 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             var c = await LockCourseAsync(snapshot.ClassId, [snapshot.MemberId], token);
             var enrollment = await repo.GetEnrollmentAsync(enrollmentId, token);
             if (enrollment.Status == EnrollmentStatus.Cancelled) return enrollmentId;
-            // Cancellation is bounded by the first lesson, not the enrollment deadline.
             if (c.CourseStartsAt is not { } startsAt)
                 throw SchedulingException.Conflict("COURSE_START_UNKNOWN", "Chưa xác định được giờ khai giảng để kiểm tra hủy khóa. Vui lòng liên hệ hỗ trợ.");
             if (clock.UtcNow >= startsAt)
@@ -211,6 +234,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return enrollmentId;
         }, ct);
 
+    // Gửi hỗ trợ cho đăng ký nguyên khóa đã trả tiền.
+    // Nghiệp vụ: Kiểm tra hội viên sở hữu đăng ký rồi lưu yêu cầu gắn với khóa; không tự hủy hay hoàn tiền.
     public Task<int> RequestSupportAsync(int actor, int enrollmentId, string reason, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-support:{enrollmentId}", key, new { reason }, async token =>
         {
@@ -224,6 +249,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return request.Id;
         }, ct);
 
+    // Quản lý xem hỗ trợ gắn với khóa học.
+    // Nghiệp vụ: Kiểm tra tài khoản quản lý đang hoạt động và tìm yêu cầu theo liên kết khóa trong tiêu đề.
     public async Task<object> SupportRequestsAsync(int actor, int courseId, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actor, UserRole.Manager, ct);
@@ -231,6 +258,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         return await repo.ListSupportRequestsAsync(prefix, ct);
     }
 
+    // Trung tâm hủy khóa và quyền lợi còn lại.
+    // Nghiệp vụ: Hoàn quyền lợi đủ điều kiện chưa hoàn, hủy đăng ký và buổi tương lai; không hoàn phần đã học.
     public Task<int> CancelCourseAsync(int actor, int id, CourseCancelRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-cancel:{id}", key, request, async token =>
         {
@@ -256,6 +285,9 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return id;
         }, ct);
 
+    // Hủy một buổi khóa: học bù hoặc hoàn phân bổ.
+    // Nghiệp vụ: Chỉ hủy buổi tương lai chưa điểm danh; buổi bù giữ thời lượng và không gây trùng lịch.
+    // Có học bù thì chuyển quyền học và lịch đặt; không bù thì hoàn phần tiền phân bổ, sau đó đóng bán khóa.
     public Task<int> CancelSessionAsync(int actor, int id, int sessionId, CourseSessionCancellation request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"course-session-cancel:{sessionId}", key, request, async token =>
         {
@@ -287,7 +319,7 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
                 repo.Add(makeup); await tx.SaveChangesAsync(token);
                 foreach (var u in units) u.CurrentSessionId = makeup.Id;
                 foreach (var b in bookings) repo.Add(new ClassBooking { SessionId = makeup.Id, MemberId = b.MemberId, EnrollmentId = b.EnrollmentId, PerformedByUserId = actor, CreatedAt = clock.UtcNow });
-                if (date > c.EndDate) c.EndDate = date; // makeup extends calendar, not the sold unit count or enrollment cutoff
+                if (date > c.EndDate) c.EndDate = date; // Buổi bù chỉ kéo dài khoảng lịch, không tăng số buổi đã bán hoặc nới hạn đăng ký.
                 var makeupStart = clock.ToUtc(date, start);
                 if (c.CourseStartsAt > makeupStart) c.CourseStartsAt = makeupStart;
                 if (c.EnrollmentClosesAt > makeupStart)
@@ -301,11 +333,13 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
                 notifications.AddNotification(b.MemberId, actor, NotificationType.ScheduleChange, "Buổi khóa đã hủy", request.RefundWithoutMakeup ? "Đã hoàn phân bổ buổi học vào số dư." : "Đã tạo buổi bù trong lịch.", $"course-session:{s.Id}:cancel:{b.MemberId}"); }
             if (s.CoachId is { } coachId) notifications.AddNotification(coachId, actor, NotificationType.ScheduleChange, "Thay đổi buổi khóa", request.Reason, $"course-session:{s.Id}:cancel:coach");
             audit.AddAudit(actor, "Course.SessionCancel", nameof(ClassSession), s.Id, request);
-            // Once any sold unit is cancelled, stop sales until a separately designed new edition. Never reopen cutoff implicitly.
+            // Sau khi hủy bất kỳ buổi đã bán nào thì ngừng bán; không tự mở lại hạn đăng ký.
             c.Status = ClassStatus.Closed;
             return s.Id;
         }, ct);
 
+    // Mua gói chỉ gồm lượt tập riêng bằng ví.
+    // Nghiệp vụ: Kiểm tra mở bán và giá, trừ ví rồi tạo gói có hiệu lực với lượt tập theo điều khoản lúc mua; chưa tạo lịch.
     public Task<PackageResult> BuyPackageAsync(int actor, int planId, BuyRequest request, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"pt-package-buy:{planId}", key, request, async token =>
         {
@@ -326,6 +360,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return new PackageResult(sub.Id, order.Id, order.PaidAmount);
         }, ct);
 
+    // Hoàn gói tập riêng mua bằng ví chưa từng giữ hoặc dùng lượt.
+    // Nghiệp vụ: Chặn gói từng dùng hoặc giữ lượt; nếu hợp lệ thì hoàn đúng tiền thực trả và không hoàn lần hai.
     public Task<int> RefundPackageAsync(int actor, int subId, string key, CancellationToken ct) =>
         wallet.ExecuteAsync(actor, $"pt-package-refund:{subId}", key, new { subId }, async token =>
         {
@@ -346,7 +382,9 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
             return subId;
         }, ct);
 
-    // `price` is the list price (checked against ExpectedPrice by callers); a voucher lowers what is actually charged.
+    // Giá niêm yết được đối chiếu với giá người mua xác nhận; mã ưu đãi có thể giảm số tiền thực thu.
+    // Tạo đơn dịch vụ và ghi chi ví.
+    // Nghiệp vụ: Dùng giá máy chủ, áp mã ưu đãi hợp lệ, lưu điều khoản lúc mua và trừ thực trả trong giao dịch dữ liệu của bên gọi.
     public async Task<CommerceOrder> PurchaseAsync(int member, int actor, CommerceOrderKind kind, decimal price, object snapshot, CancellationToken ct,
         string? voucherCode = null)
     {
@@ -366,6 +404,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         return order;
     }
 
+    // Hoàn tiền vào ví có kiểm soát.
+    // Nghiệp vụ: Tổng tiền hoàn không vượt thực trả; ghi sổ biến động ví bằng mã tham chiếu chống trùng.
     public async Task RefundOrderAsync(int actor, CommerceOrder order, decimal amount, string reference, CancellationToken ct)
     {
         if (amount == 0) return;
@@ -374,6 +414,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         await wallet.MoveAsync(order.MemberId, actor, amount, "Refund", reference, order.Id, null, ct);
     }
 
+    // Hoàn tiền lịch tập riêng đã trả bằng ví.
+    // Nghiệp vụ: Chỉ hoàn nguồn ví chưa chuyển sang lịch mới; lấy phần thực trả chưa hoàn của đơn gốc.
     public async Task RefundPtAsync(int actor, PtBooking booking, CancellationToken ct)
     {
         if (booking.FundingSource != PtFundingSource.Wallet || booking.FundingTransferred) throw SchedulingException.Conflict("PT_FUNDING_TRANSFERRED", "Nguồn thanh toán đã chuyển hoặc không phải tiền ví.");
@@ -382,6 +424,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         await RefundOrderAsync(actor, order, order.PaidAmount - order.RefundedAmount, $"order:{order.Id}:pt-refund", ct);
     }
 
+    // Hoàn giá trị một buổi khóa.
+    // Nghiệp vụ: Dùng phần tiền phân bổ lúc mua; đánh dấu đã hoàn để lần hủy toàn khóa không hoàn trùng.
     private async Task RefundUnitAsync(int actor, CourseEntitlement unit, CancellationToken ct)
     {
         if (unit.Refunded) return;
@@ -390,6 +434,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         unit.Refunded = true;
     }
 
+    // Ngừng đăng ký và hủy các lịch đặt tương lai liên quan.
+    // Nghiệp vụ: Giữ lịch sử, ghi lý do, nhật ký và thông báo; hàm này không quyết định hay cộng tiền hoàn.
     private async Task CancelEnrollmentBookingsAsync(int actor, ClassEnrollment e, string reason, CancellationToken ct)
     {
         var bookings = await repo.ListConfirmedEnrollmentBookingsAsync(e.Id, ct);
@@ -404,11 +450,13 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         await repo.FindCourseAsync(id, tracking: true, ct)
         ?? throw SchedulingException.NotFound("COURSE_NOT_FOUND", "Không tìm thấy khóa.");
 
+    // Khóa tài nguyên trước thay đổi hoặc mua khóa.
+    // Nghiệp vụ: Khóa bộ môn rồi tài nguyên và hội viên liên quan để các yêu cầu cạnh tranh kiểm tra trên dữ liệu mới.
     private async Task<Class> LockCourseAsync(int id, List<int> extraMembers, CancellationToken ct)
     {
         var snap = await repo.FindCourseAsync(id, tracking: false, ct)
             ?? throw SchedulingException.NotFound("COURSE_NOT_FOUND", "Không tìm thấy khóa.");
-        // Sport first serializes every schedule writer for this course, including resource changes.
+        // Khóa bộ môn trước để tuần tự hóa mọi thay đổi lịch của khóa, kể cả đổi tài nguyên.
         await tx.LockAsync([new(ScheduleResourceType.Sport, snap.SportId)], ct);
         var sessions = await repo.ListCourseSessionsForLockAsync(id, ct);
         var members = await repo.ListConfirmedCourseMembersAsync(id, ct);
@@ -420,6 +468,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         return await CourseEntityAsync(id, ct);
     }
 
+    // Kiểm tra khóa đủ điều kiện giao dịch.
+    // Nghiệp vụ: Kiểm tra giá, số buổi, hạn đăng ký, môn, huấn luyện viên, phòng và lịch trùng; không chỉ dựa vào kiểm tra trên giao diện.
     private async Task<List<ClassSession>> ValidateCourseAsync(Class c, CancellationToken ct)
     {
         var sessions = await repo.ListActiveCourseSessionsWithRoomsAsync(c.Id, ct);
@@ -447,6 +497,8 @@ public sealed partial class Flow2CommerceService(ICommerceRepository repo, Walle
         var user = await users.GetUserAsync(actor, ct);
         return user is { IsActive: true } ? user : throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hoạt động.");
     }
+    // So giá khách xác nhận với giá máy chủ.
+    // Nghiệp vụ: Giá xác nhận khác giá hiện tại thì báo giá đã thay đổi; khách cần xem và xác nhận lại giá mới.
     public static void EnsureExpectedPrice(decimal? expected, decimal actual)
     {
         if (expected is not null && expected != actual) throw SchedulingException.Conflict("PRICE_CHANGED", "Giá đã thay đổi. Tải lại giá và xác nhận giao dịch mới.");

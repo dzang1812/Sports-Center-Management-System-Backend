@@ -11,26 +11,28 @@ public sealed class PaymentsController(ISubscriptionService service) : Controlle
 {
     private int ActorId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    // Xem trạng thái giao dịch và mã thanh toán.
     [HttpGet("{id:int}"), Authorize(Roles = "Member,Receptionist,Manager")]
     public Task<PaymentDto> Get(int id, CancellationToken ct) => service.GetPaymentAsync(ActorId, id, ct);
 
-    // Called by the PayOS cancel page: asks PayOS for the link status and closes the payment if it was cancelled/expired.
+    // Đối chiếu giao dịch với cổng thanh toán.
     [HttpPost("{id:int}/sync-payos"), Authorize(Roles = "Member,Receptionist,Manager")]
     public Task<PaymentDto> SyncPayOs(int id, CancellationToken ct) => service.SyncPayOsStatusAsync(ActorId, id, ct);
 
-    // Manager clean-up: re-checks every pending PayOS payment, cancelling links older than their 15-minute lifetime.
+    // Rà soát giao dịch trực tuyến đang chờ.
     [HttpPost("payos/sync-pending"), Authorize(Roles = "Manager")]
     public Task<PayOsSyncSummary> SyncPendingPayOs(CancellationToken ct) => service.SyncPendingPayOsAsync(ActorId, ct);
 
-    // Cash/Card orders started at the desk, still waiting for the receptionist to confirm cash-in-hand.
+    // Xem các giao dịch thu tại quầy đang chờ xác nhận.
     [HttpGet("pending"), Authorize(Roles = "Receptionist")]
     public Task<List<PaymentDto>> Pending(CancellationToken ct) => service.ListPendingCounterPaymentsAsync(ActorId, ct);
 
+    // Xác nhận đã thu tiền tại quầy.
     [HttpPost("{id:int}/confirm-at-counter"), Authorize(Roles = "Receptionist")]
     public Task<PaymentDto> ConfirmAtCounter(int id, CancellationToken ct) =>
         service.ConfirmCounterPaymentAsync(ActorId, id, ct);
 
-    // PayOS calls this directly (no JWT); Webhooks.VerifyAsync inside the service checks the signature.
+    // Nhận xác nhận từ cổng thanh toán.
     [HttpPost("payos-webhook"), AllowAnonymous]
     public async Task<IActionResult> PayOsWebhook(Webhook webhook, CancellationToken ct)
     {
@@ -38,8 +40,7 @@ public sealed class PaymentsController(ISubscriptionService service) : Controlle
         return Ok();
     }
 
-    // One-off: run after deploying, to register the real public URL with PayOS (dashboard shows an error
-    // "Chưa cấu hình webhook" until this succeeds once). Not callable against a localhost URL.
+    // Đăng ký địa chỉ nhận xác nhận thanh toán.
     [HttpPost("payos/confirm-webhook"), Authorize(Roles = "Manager")]
     public async Task<IActionResult> ConfirmWebhook([FromBody] string webhookUrl, CancellationToken ct) =>
         Ok(new { webhookUrl = await service.ConfirmWebhookUrlAsync(ActorId, webhookUrl, ct) });

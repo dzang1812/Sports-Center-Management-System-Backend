@@ -14,6 +14,8 @@ public interface INotificationService
 
 public sealed class NotificationService(INotificationRepository notifications) : INotificationService
 {
+    // Đọc thông báo của người đang đăng nhập.
+    // Nghiệp vụ: Lọc chưa đọc nếu yêu cầu và giới hạn phân trang; không trả thông báo của người khác.
     public async Task<PagedResponse<NotificationDto>> ListAsync(int userId, bool unreadOnly, int page, int pageSize, CancellationToken ct)
     {
         page = Math.Max(1, page);
@@ -23,6 +25,8 @@ public sealed class NotificationService(INotificationRepository notifications) :
         return new(items, total, page, pageSize);
     }
 
+    // Đánh dấu một thông báo đã đọc.
+    // Nghiệp vụ: Tìm theo cả mã và chủ sở hữu; đã đọc thì không ghi lại, không có quyền thì báo không tìm thấy.
     public async Task MarkReadAsync(int userId, int notificationId, CancellationToken ct)
     {
         var notification = await notifications.GetOwnedAsync(userId, notificationId, ct)
