@@ -28,8 +28,12 @@ public interface ICatalogService
 public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepository users, IAuditLogRepository audit,
     ISchedulingTransaction transaction) : ICatalogService
 {
+    // Đọc danh mục môn và khả năng tổ chức lớp hoặc tập riêng.
+    // Nghiệp vụ: Trả thông tin cho màn hình chọn tài nguyên; quyền tổ chức lớp và tập riêng quyết định môn dùng được ở luồng nào.
     public async Task<List<SportDto>> ListSportsAsync(CancellationToken ct) => (await catalog.ListSportsAsync(ct)).Select(ToDto).ToList();
 
+    // Tạo bộ môn.
+    // Nghiệp vụ: Quản lý có tài khoản hoạt động, tên không trùng, hỗ trợ lớp hoặc tập riêng; lưu nhật ký cùng giao dịch dữ liệu.
     public async Task<SportDto> CreateSportAsync(int actorId, UpsertSportRequest request, CancellationToken ct)
     {
         ValidateCapability(request.HasClasses, request.HasPt);
@@ -47,6 +51,8 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
         }, ct);
     }
 
+    // Sửa môn và khả năng tổ chức dịch vụ.
+    // Nghiệp vụ: Khóa bộ môn; không bỏ quyền tổ chức lớp hay tập riêng đang có dữ liệu cần bảo vệ, kiểm tra tên không trùng.
     public async Task<SportDto> UpdateSportAsync(int actorId, int id, UpsertSportRequest request, CancellationToken ct)
     {
         ValidateCapability(request.HasClasses, request.HasPt);
@@ -70,8 +76,12 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
         }, ct);
     }
 
+    // Đọc danh sách phòng.
+    // Nghiệp vụ: Trả sức chứa, trạng thái và ảnh để giao diện tư vấn hoặc chọn phòng; lúc đặt lịch còn kiểm tra lại.
     public async Task<List<RoomDto>> ListRoomsAsync(CancellationToken ct) => (await catalog.ListRoomsAsync(ct)).Select(ToDto).ToList();
 
+    // Tạo phòng phục vụ sắp lịch.
+    // Nghiệp vụ: Quản lý đang hoạt động, tên phòng không trùng; lưu sức chứa, trạng thái, ảnh và nhật ký.
     public async Task<RoomDto> CreateRoomAsync(int actorId, UpsertRoomRequest request, CancellationToken ct)
     {
         return await transaction.ExecuteAsync(async token =>
@@ -88,6 +98,8 @@ public sealed class CatalogService(ICatalogRepository catalog, IScheduleUserRepo
         }, ct);
     }
 
+    // Sửa phòng và sức chứa.
+    // Nghiệp vụ: Khóa phòng; chặn tên trùng hoặc sức chứa mới nhỏ hơn lớp đang dùng phòng.
     public async Task<RoomDto> UpdateRoomAsync(int actorId, int id, UpsertRoomRequest request, CancellationToken ct)
     {
         return await transaction.ExecuteAsync(async token =>

@@ -9,13 +9,13 @@ using SportsCenter.Repository.Repositories;
 
 namespace SportsCenter.Services.Scheduling;
 
-// AttendanceStatus is null while the session is upcoming or hasn't been checked in/marked yet; once the
-// session has ended, the FE treats a null/Absent value as "missed" and Present/Late as "attended".
+// Trạng thái tham dự chưa có khi buổi chưa diễn ra hoặc chưa được điểm danh; sau khi kết thúc,
+// giao diện tính chưa điểm danh hoặc vắng là bỏ lỡ, có mặt hoặc đến muộn là đã tham dự.
 public record PersonalScheduleItem(string Type, int BookingId, int ReferenceId, string Title, string Sport,
     DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? RoomId, string? Room, int CoachId, string Coach,
     BookingStatus Status, AttendanceStatus? AttendanceStatus, int? EnrollmentId = null, PtFundingSource? FundingSource = null);
-// Status is null for a session that hasn't ended yet ("chưa điểm danh"); once it has ended, a null
-// Status means the member missed check-in and is presented as Absent.
+// Trạng thái chưa có khi buổi chưa kết thúc nghĩa là chưa điểm danh;
+// sau khi kết thúc, chưa có trạng thái được hiển thị là hội viên vắng.
 public record AttendanceHistoryItem(string Type, int ReferenceId, string Title, DateOnly Date, TimeOnly StartTime,
     TimeOnly EndTime, string? Room, string Coach, AttendanceStatus? Status, int? ClassId = null);
 public record AttendanceHistoryResponse(int Year, int Month, int CountedSessions, int AttendedSessions, decimal AttendanceRate,
@@ -54,6 +54,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
     IFlow2TimeRules timeRules, IOptions<SchedulingOptions> options, IConfiguration configuration) : IScheduleAttendanceService
 {
     private readonly SchedulingOptions settings = options.Value;
+    // Hội viên xem lịch lớp và tập riêng của mình.
+    // Nghiệp vụ: Kiểm tra hội viên đang hoạt động và khoảng ngày; chỉ ghép cả lịch hủy khi được yêu cầu.
     public async Task<List<PersonalScheduleItem>> GetPersonalScheduleAsync(int memberId, DateOnly from, DateOnly to, bool includeCancelled, CancellationToken ct)
     {
         ValidateRange(from, to, 180);
@@ -61,6 +63,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         return await ReadMemberScheduleAsync(memberId, from, to, includeCancelled, ct);
     }
 
+    // Nhân viên xem lịch hội viên đã chọn.
+    // Nghiệp vụ: Chỉ lễ tân hoặc quản lý có tài khoản hoạt động; đối tượng phải là hội viên, đọc cùng cách lịch cá nhân.
     public async Task<List<PersonalScheduleItem>> GetMemberScheduleForStaffAsync(int actorId, int memberId, DateOnly from,
         DateOnly to, bool includeCancelled, CancellationToken ct)
     {
@@ -93,6 +97,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         return classItems.Concat(ptItems).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToList();
     }
 
+    // Tổng hợp chuyên cần theo tháng.
+    // Nghiệp vụ: Chỉ tính buổi hợp lệ đã kết thúc; có mặt hoặc đến muộn là tham dự, không có dữ liệu thì tỷ lệ bằng không.
     public async Task<AttendanceHistoryResponse> GetAttendanceHistoryAsync(int memberId, int year, int month, CancellationToken ct)
     {
         if (month is < 1 or > 12 || year is < 2000 or > 2200) throw new SchedulingException("INVALID_MONTH", "Tháng/năm không hợp lệ.");
@@ -120,6 +126,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             ended.Count > 0);
     }
 
+    // Huấn luyện viên xem các buổi được phân công.
+    // Nghiệp vụ: Kiểm tra tài khoản huấn luyện viên đang hoạt động và khoảng ngày; trả lịch lớp, tập riêng, số học viên và điểm danh người dạy.
     public async Task<List<CoachScheduleItem>> GetCoachScheduleAsync(int coachId, DateOnly from, DateOnly to, CancellationToken ct)
     {
         ValidateRange(from, to, 180);
@@ -135,18 +143,25 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         return classItems.Concat(ptItems).OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToList();
     }
 
+    // Huấn luyện viên đọc danh sách học viên của lớp mình.
+    // Nghiệp vụ: Kiểm tra đúng buổi phụ trách; trả kèm trạng thái đã ghi nhận điểm danh và tình trạng tự điểm danh.
     public async Task<List<RosterItem>> GetClassRosterAsync(int coachId, int sessionId, CancellationToken ct)
     {
         await OwnsClassSessionAsync(coachId, sessionId, ct);
         return await ClassRosterAsync(sessionId, ct);
     }
 
+    // Huấn luyện viên đọc học viên của buổi tập riêng.
+    // Nghiệp vụ: Kiểm tra lịch đặt do đúng huấn luyện viên phụ trách trước khi trả hồ sơ và trạng thái tham dự.
     public async Task<List<RosterItem>> GetPtRosterAsync(int coachId, int bookingId, CancellationToken ct)
     {
         await OwnsPtBookingAsync(coachId, bookingId, ct);
         return await PtRosterAsync(bookingId, ct);
     }
 
+    // Cấp hoặc dùng lại mã điểm danh lớp.
+    // Nghiệp vụ: Khóa buổi; hội viên cần lịch đặt hợp lệ, huấn luyện viên cần đúng buổi; áp khung giờ theo cấu hình.
+    // Tái dựng mã còn hạn từ thông tin đã lưu và khóa bí mật ổn định; hết hạn mới cấp lại, chưa ghi điểm danh.
     public async Task<ClassCheckInCodeDto> IssueClassCheckInCodeAsync(int actorId, int sessionId, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
         {
@@ -165,8 +180,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 await RequireEligibleClassBookingAsync(actorId, session, token);
             ValidateCheckInWindow(session);
 
-            // Reconstruct the active code from persisted metadata under the session lock.
-            // Reopening from any authorized screen must not invalidate the code already shared.
+            // Tái dựng mã còn hiệu lực từ thông tin đã lưu khi đang giữ khóa buổi.
+            // Mở lại từ màn hình có quyền không được làm mất hiệu lực mã đã chia sẻ.
             if (session.CheckInCodeIssuedAt is { } previousIssuedAt &&
                 session.CheckInCodeIssuedByUserId is { } previousIssuer &&
                 session.CheckInCodeExpiresAt is { } previousExpiry &&
@@ -176,7 +191,7 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
                 if (CheckInCodeMatches(session, previousCode))
                     return CheckInCodeDto(sessionId, previousCode, previousExpiry);
             }
-            // PostgreSQL retains microseconds, while .NET DateTime also has sub-microsecond ticks.
+            // Cơ sở dữ liệu giữ độ chính xác phần triệu giây; thời gian trong ứng dụng còn có đơn vị nhỏ hơn.
             var issuedAt = new DateTime(clock.UtcNow.Ticks / 10 * 10, DateTimeKind.Utc);
             var code = GenerateCheckInCode(sessionId, issuedAt, actorId);
             var endUtc = clock.ToUtc(session.Date, session.EndTime);
@@ -190,6 +205,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             return CheckInCodeDto(sessionId, code, expiresAt);
         }, ct);
 
+    // Ghi nhận hội viên tự điểm danh lớp bằng mã.
+    // Nghiệp vụ: Kiểm tra khung giờ, mã, lịch đặt và quyền gói; đã ghi thì trả bản cũ, không nhân bản hay trừ tiền.
     public async Task<ClassSelfCheckInResult> MemberCheckInAsync(
         int memberId, int sessionId, ClassCheckInRequest request, CancellationToken ct)
     {
@@ -225,6 +242,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         }, ct);
     }
 
+    // Huấn luyện viên tự điểm danh buổi lớp được phân công.
+    // Nghiệp vụ: Kiểm tra quyền phụ trách, khung giờ và mã; lưu điểm danh người dạy riêng, không đổi điểm danh hội viên.
     public async Task<ClassSelfCheckInResult> CoachCheckInAsync(
         int coachId, int sessionId, ClassCheckInRequest request, CancellationToken ct)
     {
@@ -259,12 +278,16 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         }, ct);
     }
 
+    // Chặn huấn luyện viên điểm danh lớp bằng tay.
+    // Nghiệp vụ: Luôn báo lớp chỉ cho tự điểm danh; hội viên dùng chức năng tự điểm danh.
     public Task<List<RosterItem>> MarkClassAttendanceAsync(
         int coachId, int sessionId, BulkAttendanceRequest request, CancellationToken ct) =>
         Task.FromException<List<RosterItem>>(SchedulingException.Forbidden(
             "CLASS_ATTENDANCE_SELF_CHECKIN_ONLY",
             "Hội viên phải tự check-in; huấn luyện viên chỉ được xem roster."));
 
+    // Huấn luyện viên ghi tham dự buổi tập riêng.
+    // Nghiệp vụ: Đúng huấn luyện viên, hội viên và lịch đã xác nhận; đúng ngày, đã đến giờ khi bật ràng buộc rồi mới chốt.
     public async Task<List<RosterItem>> MarkPtAttendanceAsync(int coachId, int bookingId, BulkAttendanceRequest request, CancellationToken ct) =>
         await transaction.ExecuteAsync(async token =>
         {
@@ -309,6 +332,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             x.Status is not null, x.LegacyFinalized, state, x.CheckedInAt, x.Source, x.Profile);
     }
 
+    // Kiểm tra quyền điểm danh lớp.
+    // Nghiệp vụ: Cần lịch đặt đã xác nhận; nếu dùng gói thì gói phải đủ quyền tại ngày học.
     private async Task<ClassCheckInBookingRow> RequireEligibleClassBookingAsync(int memberId, ClassSession session, CancellationToken ct)
     {
         var booking = await attendances.FindConfirmedClassBookingAsync(session.Id, memberId, ct)
@@ -321,6 +346,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         return booking;
     }
 
+    // Kiểm tra thời điểm được nhận điểm danh lớp.
+    // Nghiệp vụ: Buổi phải ở trạng thái đã lên lịch; bình thường mở trước giờ bắt đầu theo cấu hình và đóng đúng giờ kết thúc.
     private void ValidateCheckInWindow(ClassSession session)
     {
         if (session.Status == SessionStatus.Cancelled)
@@ -336,6 +363,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             throw SchedulingException.Conflict("CLASS_CHECK_IN_CLOSED", "Thời gian check-in của buổi học đã kết thúc.");
     }
 
+    // Kiểm tra mã đúng buổi và hiệu lực.
+    // Nghiệp vụ: Mã phải khớp mã băm; bật ràng buộc thì chặn hết hạn, bỏ qua thời gian vẫn phải kiểm tra nội dung mã.
     private void ValidateCheckInCode(ClassSession session, string rawCode)
     {
         if (session.CheckInCodeHash is null || session.CheckInCodeExpiresAt is null)
@@ -346,6 +375,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
             throw new SchedulingException("CLASS_CHECK_IN_CODE_INVALID", "Mã không khớp buổi học này hoặc đã được thay mới. Vui lòng lấy mã hiện tại của đúng buổi từ HLV/lễ tân.");
     }
 
+    // Phân loại có mặt hoặc đến muộn.
+    // Nghiệp vụ: Trong thời gian ân hạn, kể cả đúng ranh giới, là có mặt; sau đó là đến muộn.
     private AttendanceStatus ResolveCheckInStatus(ClassSession session) =>
         clock.UtcNow <= clock.ToUtc(session.Date, session.StartTime).AddMinutes(settings.ClassPresentGraceMinutes)
             ? AttendanceStatus.Present
@@ -355,10 +386,12 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         AttendanceStatus status, DateTime checkedInAt, bool alreadyCheckedIn) =>
         new(actorType, sessionId, userId, status, checkedInAt, alreadyCheckedIn);
 
+    // Tái dựng mã ngắn bằng mã xác thực có khóa bí mật.
+    // Nghiệp vụ: Dùng khóa bí mật cùng mã buổi, giờ cấp và người cấp; không lưu mã điểm danh rõ trong cơ sở dữ liệu.
     private string GenerateCheckInCode(int sessionId, DateTime issuedAt, int issuerId)
     {
-        // Domain-separated HMAC: only a server with the secret can recover the short code.
-        // Keep the existing hash-only storage; no plaintext code, new column, or migration.
+        // Tách miền xác thực để chỉ máy chủ giữ khóa bí mật mới tái dựng được mã ngắn.
+        // Giữ cách lưu mã băm hiện tại; không lưu mã rõ, thêm cột hay thay cấu trúc cơ sở dữ liệu.
         var secret = configuration["Scheduling:ClassCheckInCodeKey"] ?? configuration["Jwt:Key"];
         if (string.IsNullOrWhiteSpace(secret))
             throw new SchedulingException("CHECK_IN_CONFIGURATION_MISSING", "Chưa cấu hình mã check-in trên Backend. Vui lòng liên hệ quản lý.", 503);
@@ -394,6 +427,8 @@ public sealed class ScheduleAttendanceService(IAttendanceRepository attendances,
         if (owner != coachId) throw SchedulingException.Forbidden("BOOKING_NOT_OWNED", "Huấn luyện viên chỉ được xem roster của mình.");
     }
 
+    // Kiểm tra ngày và giờ chốt buổi tập riêng.
+    // Nghiệp vụ: Chặn buổi hủy; bật ràng buộc thì phải đúng ngày Việt Nam và đã tới giờ bắt đầu.
     private void ValidateAttendanceDay(DateOnly date, TimeOnly startTime, bool cancelled)
     {
         if (cancelled) throw SchedulingException.Conflict("SESSION_CANCELLED", "Không thể điểm danh buổi đã hủy.");

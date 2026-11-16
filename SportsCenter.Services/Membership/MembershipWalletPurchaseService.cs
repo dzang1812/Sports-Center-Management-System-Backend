@@ -12,6 +12,9 @@ public sealed class MembershipWalletPurchaseService(IMembershipRepository plans,
     Flow2CommerceService purchases, WalletService wallet, ISchedulingTransaction transaction,
     IAuditLogRepository audit, IAppClock clock)
 {
+    // Mua hoặc gia hạn gói tự tập bằng ví.
+    // Nghiệp vụ: Chỉ mua gói tự tập đang bán, không kèm lớp hay tập riêng; chặn thanh toán chờ, so giá và trừ ví trong cùng giao dịch dữ liệu.
+    // Gia hạn nối sau kỳ gần nhất nếu còn hạn; lưu gói theo điều khoản lúc mua, không tự sinh lịch lớp hay tập riêng.
     public Task<MembershipPurchaseResult> BuyAsync(int actorId, int planId, BuyRequest request, string key,
         CancellationToken ct) => wallet.ExecuteAsync(actorId, $"membership-buy:{planId}", key, request, async token =>
     {

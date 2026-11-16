@@ -38,6 +38,8 @@ public interface IMembershipPlanService
 public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepository users,
     ISchedulingTransaction transaction) : IMembershipPlanService
 {
+    // Đọc danh sách gói tập.
+    // Nghiệp vụ: Có thể chỉ lấy gói đang bán hoặc cả gói đã ẩn; trả loại gói và các môn áp dụng.
     public async Task<List<PlanDto>> ListAsync(bool activeOnly, CancellationToken ct)
     {
         var sports = await repo.ListSportsAsync(ct);
@@ -45,6 +47,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
             .Select(x => MembershipPlanPresentation.ToDto(x, sports)).ToList();
     }
 
+    // Đọc một gói theo quyền xem.
+    // Nghiệp vụ: Không cho người không đủ quyền xem gói ẩn; trả cấu hình giá, thời hạn và quyền lợi.
     public async Task<PlanDto> GetAsync(int id, bool includeInactive, CancellationToken ct)
     {
         var plan = await repo.GetPlanAsync(id, ct);
@@ -53,6 +57,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         return MembershipPlanPresentation.ToDto(plan, await repo.ListSportsAsync(ct));
     }
 
+    // Tạo gói tự tập, lớp hoặc tập riêng.
+    // Nghiệp vụ: Kiểm tra quyền quản lý, tên, giá, thời hạn, môn và quyền lợi; chỉ gói thuần tập riêng được bán bằng ví theo luồng riêng.
     public async Task<PlanDto> CreateAsync(int actorId, UpsertPlanRequest request, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -74,6 +80,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         }, ct);
     }
 
+    // Sửa gói đang có.
+    // Nghiệp vụ: Khóa gói; không tùy ý đổi quyền đã bán hoặc chuyển loại gói tập riêng thanh toán bằng ví.
     public async Task<PlanDto> UpdateAsync(int actorId, int id, UpsertPlanRequest request, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -102,6 +110,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         }, ct);
     }
 
+    // Ẩn hoặc mở bán lại gói.
+    // Nghiệp vụ: Ẩn vẫn giữ gói đã mua và lịch sử; mở bán lại phải kiểm tra cấu hình, không tự sửa quyền đã mua.
     public async Task<PlanDto> SetActiveAsync(int actorId, int id, bool isActive, CancellationToken ct)
     {
         var actor = await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -117,8 +127,6 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
             if (plan.IsActive == isActive)
                 return MembershipPlanPresentation.ToDto(plan, await repo.ListSportsAsync(token));
 
-            // Old packages may have invalid/missing benefits. They must still be removable from sale.
-            // Reopening validates the saved package without changing any purchased entitlements.
             var sports = isActive
                 ? await ValidateRequestAsync(new(plan.Name, plan.Description, plan.DurationDays, plan.Price,
                     true, plan.SportId, plan.IncludesClasses, plan.PtSessionCredits, plan.IncludesGymAccess,
@@ -132,6 +140,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         }, ct);
     }
 
+    // Kiểm tra cấu hình và quyền của gói.
+    // Nghiệp vụ: Chọn thời hạn ngày hoặc tháng, môn phù hợp và ít nhất một quyền; không tạo gói không dùng được.
     private async Task<List<Sport>> ValidateRequestAsync(UpsertPlanRequest request, MembershipPlan? existing,
         CancellationToken ct)
     {
@@ -187,6 +197,8 @@ public sealed class MembershipPlanService(IMembershipRepository repo, IUserRepos
         request.IncludesGymAccess.HasValue && plan.IncludesGymAccess != request.IncludesGymAccess.Value ||
         plan.PtSessionCredits != request.PtSessionCredits;
 
+    // Kiểm tra cách tính thời hạn gói.
+    // Nghiệp vụ: Phải chọn ngày hoặc tháng, không đồng thời cả hai và không để cả hai bằng 0.
     private static void ValidateDuration(UpsertPlanRequest request)
     {
         if ((request.DurationDays > 0) == (request.DurationMonths > 0))

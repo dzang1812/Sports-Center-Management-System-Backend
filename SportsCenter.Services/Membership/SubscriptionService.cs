@@ -19,7 +19,7 @@ public record SubscriptionDto(int Id, int MemberId, int PlanId, string PlanName,
     int RemainingDays, bool IncludesClasses, int? SportId, string? SportName,
     IReadOnlyList<PlanSportDto> AllowedSports, PaymentStatus? PaymentStatus, int? PurchaseOrderId = null);
 
-// Covers both pending checkout and settled invoice; clients branch on Status.
+// Dữ liệu gồm cả đơn chờ trả tiền và biên nhận đã thanh toán; giao diện phân biệt bằng trạng thái.
 public record PaymentDto(int Id, int MemberId, string MemberName, int? SubscriptionId, string? PlanName,
     decimal Amount, PaymentMethod Method, PaymentStatus Status, string? InvoiceNumber, DateTime PaidAt,
     string? CheckoutUrl, string? QrCode, string? ReceivedByName, PaymentPurpose Purpose = PaymentPurpose.LegacySubscription);
@@ -45,6 +45,8 @@ public interface ISubscriptionService
 public sealed class SubscriptionService(IMembershipRepository repo, IUserRepository users, IAppClock clock,
     ISchedulingTransaction transaction, PayOSClient payOs, IOptions<MailOptions> mailOptions, WalletService wallet, MemberTierService tiers) : ISubscriptionService
 {
+    // Lấy mã thanh toán chuyển khoản cho buổi tập riêng tại quầy.
+    // Nghiệp vụ: Giao dịch phải thuộc đúng lễ tân, là nạp ví chuyển khoản và không gắn với gói theo luồng thanh toán cũ.
     public async Task<PaymentDto> GetCounterTopUpCheckoutAsync(int actorId, int paymentId, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
@@ -56,6 +58,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return await AttachCheckoutLinkAsync(paymentId, ct);
     }
 
+    // Tạo yêu cầu nạp ví trực tuyến.
+    // Nghiệp vụ: Dùng khóa chống trùng và khóa hội viên để tạo giao dịch chờ; chỉ xác nhận tiền thật mới cộng ví.
     public async Task<PaymentDto> CreateWalletTopUpAsync(int actorId, OnlineTopUpRequest request, string key, CancellationToken ct)
     {
         var paymentId = await wallet.ExecuteAsync(actorId, "online-top-up", key, request, async token =>
@@ -77,7 +81,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             ?? throw SchedulingException.NotFound("PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch.");
         if (pending.Status != PaymentStatus.Pending || pending.CheckoutUrl != null)
             return ToPaymentDto(pending, pending.Member, pending.Subscription?.Plan.Name);
-        // No DB transaction across the provider call. The committed Pending row/order is reused on retry.
+        // Không giữ giao dịch cơ sở dữ liệu khi gọi nhà cung cấp; đơn chờ đã lưu được dùng lại khi gửi lại yêu cầu.
         var link = await CreatePayOsLinkAsync(pending, ct);
         return await transaction.ExecuteAsync(async token =>
         {
@@ -87,6 +91,9 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         }, ct);
     }
 
+    // Đăng ký hoặc gia hạn gói theo luồng thanh toán cũ.
+    // Nghiệp vụ: Dùng lại đơn chờ cùng phương thức khi gửi lại; khác phương thức thì báo xung đột, không tự thay đơn.
+    // Gói tập riêng trả ví dùng đường dẫn riêng; gói mới chờ thanh toán, chỉ có quyền sau khi xác nhận tiền hợp lệ.
     public async Task<PaymentDto> SubscribeAsync(int actorId, SubscribeRequest request, CancellationToken ct)
     {
         var (actor, member) = await ResolveSubscribeTargetAsync(actorId, request.MemberId);
@@ -97,11 +104,11 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             throw SchedulingException.Forbidden("COUNTER_PAYMENT_REQUIRES_RECEPTIONIST",
                 "Chỉ lễ tân được tạo thanh toán tiền mặt hoặc thẻ tại quầy.");
 
-        // A pending PayOS order for this plan is reused below; if its link was cancelled or has expired, close it first.
+        // Dùng lại đơn trực tuyến đang chờ của gói; nếu liên kết đã hủy hoặc hết hạn thì đóng đơn cũ trước.
         var previous = await repo.GetPendingSubscriptionPaymentAsync(member.Id, request.PlanId, ct);
         if (previous is { Method: PaymentMethod.BankTransfer, CheckoutUrl: not null })
             try { await SyncWithPayOsAsync(actorId, previous.Id, cancelStale: false, ct); }
-            catch (SchedulingException) { } // PayOS unreachable: keep the old order, as before
+            catch (SchedulingException) { } // Không kết nối được cổng thanh toán thì giữ đơn cũ.
 
         var draft = await transaction.ExecuteAsync(async token =>
         {
@@ -158,6 +165,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             ? await AttachCheckoutLinkAsync(draft.Id, ct) : draft;
     }
 
+    // Xác nhận tiền đã thu tại quầy.
+    // Nghiệp vụ: Chỉ lễ tân có tài khoản hoạt động; không xác nhận chuyển khoản bằng tay, khóa hội viên và không xử lý đơn đã trả tiền lần hai.
     public async Task<PaymentDto> ConfirmCounterPaymentAsync(int actorId, int paymentId, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
@@ -184,6 +193,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         }, ct);
     }
 
+    // Lấy giao dịch tại quầy đang chờ.
+    // Nghiệp vụ: Kiểm tra lễ tân đang hoạt động rồi trả danh sách để đối chiếu trước khi xác nhận thu tiền.
     public async Task<List<PaymentDto>> ListPendingCounterPaymentsAsync(int actorId, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Receptionist);
@@ -191,6 +202,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return payments.Select(p => ToPaymentDto(p, p.Member, p.Subscription?.Plan.Name)).ToList();
     }
 
+    // Đọc gói đã mua, hạn và quyền còn lại.
+    // Nghiệp vụ: Xác định đúng hội viên theo quyền; ghép trạng thái thanh toán và thông tin gói theo ngày Việt Nam.
     public async Task<List<SubscriptionDto>> ListForMemberAsync(int actorId, int? memberId, CancellationToken ct)
     {
         var targetId = await ResolveViewTargetAsync(actorId, memberId);
@@ -202,6 +215,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             paymentStatuses.TryGetValue(x.Id, out var status) ? status : null)).ToList();
     }
 
+    // Đọc chi tiết giao dịch theo quyền.
+    // Nghiệp vụ: Hội viên chỉ xem giao dịch của mình; lễ tân và quản lý xem theo quyền, nhận trạng thái cùng thông tin thanh toán.
     public async Task<PaymentDto> GetPaymentAsync(int actorId, int paymentId, CancellationToken ct)
     {
         var actor = await users.GetByIdAsync(actorId)
@@ -215,7 +230,10 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return ToPaymentDto(payment, payment.Member, payment.Subscription?.Plan.Name);
     }
 
-    // PayOS calls this unauthenticated; VerifyAsync authenticates the webhook signature.
+    // Cổng thanh toán gọi không cần đăng nhập; xác minh chữ ký để xác thực thông báo.
+    // Xử lý thông báo xác nhận từ cổng thanh toán.
+    // Nghiệp vụ: Xác minh chữ ký, số tiền, tiền tệ, đơn hàng, liên kết và mã tham chiếu; khóa hội viên, chỉ xử lý giao dịch đang chờ.
+    // Thành công mới ghi nhận thanh toán; thông báo gửi lặp không cộng ví hoặc kích hoạt gói lần hai.
     public async Task HandleWebhookAsync(Webhook webhook, CancellationToken ct)
     {
         WebhookData data;
@@ -251,15 +269,17 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         await repo.AddAuditAsync(actorId, "Payment.Failed", nameof(Payment), payment.Id, details, ct);
     }
 
-    // PayOS links expire this long after creation (ExpiredAt). The sync job also cancels older links created before expiry was set.
+    // Liên kết thanh toán hết hạn sau thời gian này; tác vụ đồng bộ cũng hủy các liên kết cũ chưa có mốc hết hạn.
     private static readonly TimeSpan PayOsLinkLifetime = TimeSpan.FromMinutes(15);
 
     private enum SyncOutcome { Skipped, MarkedFailed, CancelledOnPayOs, StillPending }
 
-    // PayOS only webhooks successful payments; a link the buyer cancelled or that expired is learnt by asking PayOS.
+    // Cổng chỉ chủ động báo giao dịch thành công; trạng thái khách hủy hoặc hết hạn cần hỏi lại cổng.
+    // Đối chiếu giao dịch với nhà cung cấp.
+    // Nghiệp vụ: Kiểm tra quyền xem trước khi hỏi cổng thanh toán; cập nhật trạng thái hủy hoặc hết hạn theo phản hồi.
     public async Task<PaymentDto> SyncPayOsStatusAsync(int actorId, int paymentId, CancellationToken ct)
     {
-        // Same access rules as GetPaymentAsync, checked without tracking the row so the final read below sees the committed state.
+        // Dùng cùng quyền xem chi tiết giao dịch; đọc không theo dõi để lần đọc cuối nhận trạng thái đã được lưu.
         var actor = await users.GetByIdAsync(actorId)
             ?? throw SchedulingException.Forbidden("ACTOR_INACTIVE", "Tài khoản không hợp lệ hoặc đã bị khóa.");
         var state = await repo.GetPayOsStateAsync(paymentId, ct)
@@ -272,13 +292,16 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return await GetPaymentAsync(actorId, paymentId, ct);
     }
 
+    // Quản lý rà soát giao dịch trực tuyến đang chờ.
+    // Nghiệp vụ: Kiểm tra quyền quản lý rồi đồng bộ, trả tổng số xử lý và lỗi; không bỏ qua xác minh thanh toán.
     public async Task<PayOsSyncSummary> SyncPendingPayOsAsync(int actorId, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
         return await SyncPendingAsync(actorId, ct);
     }
 
-    // Background worker entry point (no signed-in actor; the audit row is attributed to the member, like the webhook).
+    // Tác vụ nền đồng bộ giao dịch trực tuyến đang chờ.
+    // Nghiệp vụ: Dùng cùng quy tắc đồng bộ, không cần người thao tác trên trình duyệt; nhật ký gắn với hội viên.
     public Task<PayOsSyncSummary> SyncAllPendingPayOsAsync(CancellationToken ct) => SyncPendingAsync(null, ct);
 
     private async Task<PayOsSyncSummary> SyncPendingAsync(int? actorId, CancellationToken ct)
@@ -301,7 +324,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         return new(ids.Count, failed, cancelled, pending, errors);
     }
 
-    // Never marks Paid: money is only credited through the signed webhook.
+    // Không tự đánh dấu đã trả tiền; chỉ thông báo có chữ ký hợp lệ mới được cộng ví.
     private async Task<SyncOutcome> SyncWithPayOsAsync(int? actorId, int paymentId, bool cancelStale, CancellationToken ct)
     {
         var key = await repo.GetPayOsStateAsync(paymentId, ct);
@@ -321,7 +344,7 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             outcome = SyncOutcome.CancelledOnPayOs;
         }
         else if (link.Status is not (PaymentLinkStatus.Cancelled or PaymentLinkStatus.Expired or PaymentLinkStatus.Failed))
-            return SyncOutcome.StillPending; // Paid (webhook pending), Underpaid, Processing: leave for the webhook / staff
+            return SyncOutcome.StillPending; // Đã trả nhưng chờ thông báo, trả thiếu hoặc đang xử lý thì giữ nguyên để cổng thanh toán hoặc nhân viên xử lý.
 
         return await transaction.ExecuteAsync(async token =>
         {
@@ -334,6 +357,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         }, ct);
     }
 
+    // Đăng ký địa chỉ công khai nhận xác nhận với cổng thanh toán.
+    // Nghiệp vụ: Chỉ quản lý, địa chỉ công khai hợp lệ; không tạo giao dịch hoặc nạp tiền tại đây.
     public async Task<string> ConfirmWebhookUrlAsync(int actorId, string webhookUrl, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -362,6 +387,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
         }
     }
 
+    // Áp dụng một lần thanh toán thành công.
+    // Nghiệp vụ: Ghi đã thanh toán; theo mục đích mà nạp ví hoặc kích hoạt gói, kèm nhật ký tương ứng.
     private async Task ConfirmPaymentAsync(Payment payment, int actorId, string reference, CancellationToken ct)
     {
         payment.Status = PaymentStatus.Paid;
@@ -378,8 +405,8 @@ public sealed class SubscriptionService(IMembershipRepository repo, IUserReposit
             new { payment.PayOsOrderCode, Reference = reference }, ct);
     }
 
-    // Done here (confirm time), not at order creation: the new row is Pending until paid,
-    // so a still-active prior subscription for the same plan is only ever extended once money has actually landed.
+    // Chỉ tính gia hạn khi xác nhận tiền đã đến; đơn mới vẫn chờ thanh toán trước thời điểm đó,
+    // vì vậy gói cũ còn hạn chỉ được nối tiếp khi thu tiền thành công.
     private async Task ActivateOrMergeSubscriptionAsync(Payment payment, CancellationToken ct)
     {
         var sub = payment.Subscription!;

@@ -16,6 +16,8 @@ public sealed class SubscriptionCancellationService(IMembershipRepository repo, 
     private const string Version = "cancel-without-refund-v1";
     private const string Policy = "Gói ngừng hiệu lực ngay sau khi xác nhận hủy. Không hoàn tiền hoặc quy đổi thời hạn, buổi PT còn lại. Lịch sử đăng ký và thanh toán vẫn được giữ.";
 
+    // Xem trước hủy gói không hoàn tiền.
+    // Nghiệp vụ: Kiểm tra hội viên sở hữu và điều kiện chặn; trả số tiền hoàn bằng không cùng phiên bản chính sách để xác nhận.
     public async Task<SubscriptionCancellationPreview> PreviewAsync(int actorId, int subscriptionId, CancellationToken ct)
     {
         await EnsureMemberAsync(actorId);
@@ -24,6 +26,8 @@ public sealed class SubscriptionCancellationService(IMembershipRepository repo, 
         return new(sub.Id, sub.Plan.Name, reason is null, reason, 0, Version, Policy);
     }
 
+    // Hội viên ngừng sử dụng gói của mình.
+    // Nghiệp vụ: Yêu cầu xác nhận chính sách không hoàn tiền; khóa hội viên, kiểm tra lại rồi hủy gói, không đổi ví, đơn hàng hay thanh toán.
     public async Task<SubscriptionCancellationResult> CancelAsync(int actorId, int subscriptionId,
         CancelSubscriptionRequest request, CancellationToken ct)
     {
@@ -32,15 +36,15 @@ public sealed class SubscriptionCancellationService(IMembershipRepository repo, 
             throw SchedulingException.Conflict("CANCELLATION_CONFIRMATION_REQUIRED", "Vui lòng mở lại xác nhận và đọc chính sách hủy gói hiện tại.");
         return await transaction.ExecuteAsync(async token =>
         {
-            // Booking, check-in, renewal and payment writers also hold this member lock.
+            // Các thao tác đặt lịch, điểm danh, gia hạn và thanh toán cũng giữ cùng khóa hội viên này.
             await transaction.LockAsync([new(ScheduleResourceType.Member, actorId)], token);
             var sub = await RequireOwnedAsync(actorId, subscriptionId, token);
             if (sub.Status == SubscriptionStatus.Cancelled) return Result(sub.Id);
             var reason = await UnavailableReasonAsync(sub, token);
             if (reason is not null) throw SchedulingException.Conflict("SUBSCRIPTION_CANCELLATION_BLOCKED", reason);
             sub.Status = SubscriptionStatus.Cancelled;
-            // No wallet/order/payment changes. Remaining credits are preserved as historical data,
-            // but Cancelled subscriptions cannot fund new bookings or check-ins.
+            // Không đổi ví, đơn hàng hay thanh toán; lượt còn lại được giữ làm lịch sử,
+            // nhưng gói đã hủy không được dùng để đặt lịch hoặc vào trung tâm.
             await repo.AddAuditAsync(actorId, "Subscription.MemberCancel", nameof(MemberSubscription), sub.Id,
                 new { sub.PlanId, sub.StartDate, sub.EndDate, sub.RemainingPtSessions, RefundedAmount = 0m, PolicyVersion = Version }, token);
             notifications.AddNotification(actorId, actorId, NotificationType.General, "Đã hủy gói tập",
@@ -60,6 +64,8 @@ public sealed class SubscriptionCancellationService(IMembershipRepository repo, 
         await repo.FindOwnedSubscriptionAsync(actorId, subscriptionId, ct)
         ?? throw SchedulingException.NotFound("SUBSCRIPTION_NOT_FOUND", "Không tìm thấy gói tập của bạn.");
 
+    // Xác định lý do chưa được tự hủy gói.
+    // Nghiệp vụ: Chặn nếu trạng thái hoặc hạn không hợp lệ, còn lượt vào trung tâm đang mở, thanh toán chờ hoặc lịch tập chưa kết thúc.
     private async Task<string?> UnavailableReasonAsync(MemberSubscription sub, CancellationToken ct)
     {
         var localNow = clock.LocalNow;

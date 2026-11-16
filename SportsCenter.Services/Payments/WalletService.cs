@@ -16,6 +16,8 @@ public record WalletEntryDto(int Id, decimal Amount, decimal BalanceAfter, strin
 public sealed class WalletService(ICommerceRepository repo, ISchedulingTransaction tx, IScheduleUserRepository users,
     IAuditLogRepository audit, INotificationRepository notifications, IAppClock clock)
 {
+    // Xác định chủ ví theo người thao tác.
+    // Nghiệp vụ: Hội viên chỉ dùng ví mình; lễ tân được thao tác hộ, quản lý chỉ đọc theo quyền.
     public async Task<int> TargetAsync(int actorId, int? requested, bool write, CancellationToken ct)
     {
         var actor = await users.GetUserAsync(actorId, ct);
@@ -28,14 +30,17 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
         return target;
     }
 
+    // Đọc số dư ví để đối chiếu.
+    // Nghiệp vụ: Đọc số dư và tổng sổ biến động trên cùng trạng thái dữ liệu; chưa có giao dịch thì tổng bằng không.
     public async Task<WalletDto> GetAsync(int actorId, int? memberId, CancellationToken ct)
     {
         var id = await TargetAsync(actorId, memberId, false, ct);
-        // Both values are read in one statement/snapshot, including an account with no ledger yet.
         var row = await repo.GetWalletBalanceAsync(id, ct);
         return new(row.MemberId, row.Balance, row.LedgerBalance);
     }
 
+    // Đọc lịch sử tiền của hội viên.
+    // Nghiệp vụ: Kiểm tra quyền và phân trang; số tiền có dấu tăng hoặc giảm, kèm số dư sau giao dịch.
     public async Task<PagedResponse<WalletEntryDto>> LedgerAsync(int actorId, int? memberId, int page, CancellationToken ct)
     {
         var id = await TargetAsync(actorId, memberId, false, ct);
@@ -45,6 +50,8 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
             x.OrderId, x.PaymentId, x.ActorId, x.CreatedAt)).ToList(), total, page, 20);
     }
 
+    // Ghi tiền đã thu tại quầy vào ví.
+    // Nghiệp vụ: Kiểm tra lễ tân đang hoạt động, số tiền, biên nhận và khóa chống trùng; khóa hội viên, ghi đã thu rồi cộng ví một lần.
     public Task<int> CashAsync(int actorId, CashTopUpRequest request, string key, CancellationToken ct) =>
         ExecuteAsync(actorId, "cash-top-up", key, request, async token =>
         {
@@ -54,7 +61,7 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
             if (request.ReceiptReference?.Trim().Length > 100)
                 throw new SchedulingException("RECEIPT_INVALID", "Mã tham chiếu biên nhận tối đa 100 ký tự.");
             await tx.LockAsync([new(ScheduleResourceType.Member, member)], token);
-            // The replay key identifies this cash collection even when the client supplies no reference.
+            // Khóa chống trùng nhận diện lần thu tiền này kể cả khi phía gọi không gửi mã tham chiếu.
             var reference = string.IsNullOrWhiteSpace(request.ReceiptReference)
                 ? $"cash:auto:{actorId}:{key}" : "cash:" + request.ReceiptReference.Trim();
             if (await repo.PaymentReferenceExistsAsync(reference, token))
@@ -69,7 +76,9 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
             return payment.Id;
         }, ct);
 
-    // Caller must hold the shared Member advisory lock and an open scheduling transaction.
+    // Ghi một biến động tiền và số dư sau giao dịch.
+    // Nghiệp vụ: Bên gọi phải giữ khóa hội viên và giao dịch dữ liệu; chặn số dư âm, vượt trần hoặc mã tham chiếu đã dùng.
+    // Cập nhật ví, sổ biến động, nhật ký và thông báo trong cùng nghiệp vụ để đối chiếu.
     public async Task MoveAsync(int memberId, int actorId, decimal signedAmount, string kind, string reference,
         int? orderId, int? paymentId, CancellationToken ct)
     {
@@ -88,6 +97,9 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
             $"{kind}: {signedAmount:N0} VND. Số dư: {wallet.Balance:N0} VND.", "wallet:" + reference);
     }
 
+    // Chống lặp thao tác thương mại.
+    // Nghiệp vụ: Khóa theo người thao tác; lưu loại thao tác, khóa chống trùng, mã băm nội dung và kết quả.
+    // Gửi lại cùng nội dung thì trả kết quả cũ; dùng lại khóa với nội dung khác thì báo xung đột. Toàn bộ thao tác cùng giao dịch dữ liệu.
     public async Task<T> ExecuteAsync<T>(int actorId, string operation, string key, object payload,
         Func<CancellationToken, Task<T>> action, CancellationToken ct)
     {
@@ -110,6 +122,8 @@ public sealed class WalletService(ICommerceRepository repo, ISchedulingTransacti
         }, ct);
     }
 
+    // Kiểm tra số tiền Việt Nam đồng hợp lệ.
+    // Nghiệp vụ: Chỉ chấp nhận số nguyên dương, tối đa một tỷ cho mỗi khoản kiểm tra.
     public static void ValidateMoney(decimal amount)
     {
         if (amount <= 0 || amount != decimal.Truncate(amount) || amount > 1000000000m)

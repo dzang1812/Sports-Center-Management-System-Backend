@@ -22,6 +22,8 @@ public sealed partial class PtService
         return start.AddDays(6);
     }
 
+    // Đọc giờ rảnh tập riêng của đúng một tuần.
+    // Nghiệp vụ: Tuần bắt đầu thứ Hai; trả khung theo ngày, lịch đặt cần bảo vệ, môn phù hợp và mẫu giờ cũ.
     public async Task<WeekAvailabilityResponse> GetWeekAvailabilityAsync(int coachId, DateOnly weekStart, CancellationToken ct)
     {
         var end = WeekEnd(weekStart);
@@ -38,6 +40,8 @@ public sealed partial class PtService
             legacy.Where(x => eligible.Contains(x.SportId)).Select(x => new AvailabilityItem(x.Id, x.SportId, x.Sport.Name, x.DayOfWeek, x.StartTime, x.EndTime)).ToList());
     }
 
+    // Huấn luyện viên thay toàn bộ giờ rảnh trong tuần chọn.
+    // Nghiệp vụ: Kiểm tra chuyên môn và khung không chồng; khóa huấn luyện viên, bảo vệ lịch đặt cần giữ rồi mới thay dữ liệu.
     public async Task<WeekAvailabilityResponse> ReplaceWeekAvailabilityAsync(int actorId, ReplaceWeekAvailabilityRequest request, CancellationToken ct)
     {
         var end = WeekEnd(request.WeekStart);
@@ -58,7 +62,7 @@ public sealed partial class PtService
                 uncovered.Select(b => new BookedPtWindow(b.Id, b.SportId, b.Date, b.StartTime, b.EndTime)).ToList());
             var current = await pt.GetActiveAvailabilityForUpdateAsync(actorId, request.WeekStart, end, token);
             foreach (var item in current) item.IsActive = false;
-            // Release old unique keys before inserting replacements, within the same coach lock and transaction.
+            // Gỡ khóa duy nhất của khung cũ trước khi thêm khung thay thế, trong cùng khóa huấn luyện viên và giao dịch dữ liệu.
             await transaction.SaveChangesAsync(token);
             pt.AddAvailabilities(request.Items.Select(x => new CoachAvailability
             {
@@ -71,6 +75,8 @@ public sealed partial class PtService
         }, ct);
     }
 
+    // Kiểm tra bộ khung rảnh theo tuần.
+    // Nghiệp vụ: Tối đa 50 khung, mọi ngày thuộc tuần, giờ tròn và không qua đêm; không chồng kể cả khác môn.
     private static void ValidateWeekAvailability(List<WeekAvailabilityRange>? items, DateOnly from, DateOnly to)
     {
         if (items is null) throw new SchedulingException("INVALID_AVAILABILITY", "Thiếu danh sách khung giờ.");

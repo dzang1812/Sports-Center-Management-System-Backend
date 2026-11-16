@@ -6,11 +6,11 @@ namespace SportsCenter.Services.Membership;
 
 public record RevenueReport(DateOnly From, DateOnly To, decimal TotalRevenue, int PaymentCount, int NewMembers,
     int NewSubscriptions, int ActiveSubscriptions, int ExpiredSubscriptions, int NewClassBookings);
-// ItemId is the plan / course / PT package id; null for single PT sessions (one line for all of them).
+// Mã dịch vụ là mã gói hoặc khóa; buổi tập riêng lẻ không có mã này và được gom chung một dòng.
 public record RevenueItem(CommerceOrderKind Kind, int? ItemId, string Name, int Orders, decimal Revenue);
 public record RevenueByItemReport(DateOnly From, DateOnly To, decimal TotalRevenue, List<RevenueItem> Items);
 public enum MoneyLogType { CashTopUp, OnlineTopUp, Purchase, Refund }
-// Amount is signed (+ into the wallet, − out of it). Pending/Failed top-ups never reached the wallet: BalanceAfter is null.
+// Số tiền dương là vào ví, âm là chi ví; khoản nạp chưa thành công chưa đổi ví nên không có số dư sau giao dịch.
 public record MoneyLogItem(string Source, int SourceId, DateTime At, MoneyLogType Type, PaymentStatus Status,
     int MemberId, string MemberName, int? ActorId, string? ActorName, UserRole? ActorRole, decimal Amount, decimal? BalanceAfter,
     string Method, string Description, CommerceOrderKind? ItemKind, string? ItemName, string Reference, int? OrderId, int? PaymentId,
@@ -33,6 +33,8 @@ public interface IMembershipReportService
 
 public sealed class MembershipReportService(IMembershipRepository repo, IUserRepository users, IAppClock clock) : IMembershipReportService
 {
+    // Quản lý đối chiếu biên nhận nạp ví.
+    // Nghiệp vụ: Đổi khoảng ngày Việt Nam sang giờ quốc tế; trả biên nhận phân trang và tổng thu theo phương thức.
     public async Task<WalletReceiptReport> GetWalletReceiptsAsync(int actorId, DateOnly from, DateOnly to,
         string? search, int page, int pageSize, CancellationToken ct)
     {
@@ -46,6 +48,8 @@ public sealed class MembershipReportService(IMembershipRepository repo, IUserRep
         return new(from, to, data.Items, data.Total, page, pageSize, data.TotalAmount, data.CashAmount, data.BankTransferAmount);
     }
 
+    // Tổng hợp doanh thu dịch vụ và các chỉ số liên quan.
+    // Nghiệp vụ: Kiểm tra quyền quản lý và khoảng ngày; lấy nguồn doanh thu dịch vụ, không cộng tiền nạp ví lần nữa.
     public async Task<RevenueReport> GetRevenueReportAsync(int actorId, DateOnly from, DateOnly to, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -60,6 +64,8 @@ public sealed class MembershipReportService(IMembershipRepository repo, IUserRep
             data.NewSubscriptions, data.ActiveSubscriptions, data.ExpiredSubscriptions, data.NewClassBookings);
     }
 
+    // Phân tích doanh thu theo dịch vụ.
+    // Nghiệp vụ: Nhóm doanh thu theo khóa, gói hoặc tập riêng để đối chiếu số đơn và giá trị.
     public async Task<RevenueByItemReport> GetRevenueByItemAsync(int actorId, DateOnly from, DateOnly to, CancellationToken ct)
     {
         await MembershipRules.EnsureActiveRoleAsync(users, actorId, UserRole.Manager);
@@ -70,6 +76,8 @@ public sealed class MembershipReportService(IMembershipRepository repo, IUserRep
         return new(from, to, items.Sum(x => x.Revenue), items);
     }
 
+    // Tra sổ nạp, mua và hoàn tiền.
+    // Nghiệp vụ: Kiểm tra khoảng ngày và bộ lọc; trả tổng hợp và từng dòng, phân biệt thực thu, chi, hoàn và đang chờ.
     public async Task<MoneyLogReport> GetMoneyLogAsync(int actorId, DateOnly from, DateOnly to, MoneyLogType? type, PaymentStatus? status,
         string? search, int page, int pageSize, CancellationToken ct)
     {
@@ -78,8 +86,8 @@ public sealed class MembershipReportService(IMembershipRepository repo, IUserRep
         if (search?.Length > 100) throw new SchedulingException("REPORT_SEARCH_INVALID", "Nội dung tìm kiếm tối đa 100 ký tự.");
         page = Math.Clamp(page, 1, 1000000); pageSize = Math.Clamp(pageSize, 1, 100);
 
-        // shortcut: both sources are merged, filtered and paged in memory; fine for one centre's volume within a 1-year range,
-        // move paging into SQL (UNION view) if the ledger grows to hundreds of thousands of rows a year.
+        // Hiện gộp, lọc và phân trang hai nguồn trong bộ nhớ, phù hợp một trung tâm và khoảng tối đa một năm.
+        // Nếu sổ biến động tăng lên hàng trăm nghìn dòng mỗi năm, nên chuyển việc phân trang xuống cơ sở dữ liệu.
         var rows = await repo.ListMoneyLogAsync(clock.ToUtc(from, TimeOnly.MinValue), clock.ToUtc(to.AddDays(1), TimeOnly.MinValue), search ?? "", ct);
         var items = rows.Select(ToMoneyLogItem)
             .Where(x => (type is null || x.Type == type) && (status is null || x.Status == status))
@@ -140,7 +148,7 @@ public sealed class MembershipReportService(IMembershipRepository repo, IUserRep
             g.Select(x => x.Item.Name).FirstOrDefault(n => n is not null) ?? DefaultName(g.Key.Kind), g.Count(), g.Sum(x => x.Amount)))
         .OrderByDescending(x => x.Revenue).ToList();
 
-    // Orders keep the bought item as JSON ({"Id":..,"Name":..}); single PT sessions have neither.
+    // Đơn hàng lưu mã và tên dịch vụ lúc mua dưới dạng dữ liệu có cấu trúc; buổi tập riêng lẻ không có hai thông tin này.
     private static (int? Id, string? Name) ReadSnapshotItem(string snapshot)
     {
         try

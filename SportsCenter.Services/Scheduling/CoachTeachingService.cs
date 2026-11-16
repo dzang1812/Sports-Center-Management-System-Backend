@@ -16,18 +16,24 @@ public sealed class CoachTeachingService(ICoachTeachingRepository reports, ISche
 {
     public const string CountingRule = "Chỉ tính buổi đã kết thúc, có điểm danh Present/Late hoặc trạng thái hoàn thành; không tính buổi hủy/vắng. Khóa đã dạy là khóa nhiều tuần có ít nhất một buổi được tính trong quý; mỗi khóa chỉ tính một lần cho mỗi HLV trong quý.";
 
+    // Huấn luyện viên xem giảng dạy của mình theo quý.
+    // Nghiệp vụ: Kiểm tra tài khoản huấn luyện viên đang hoạt động; đọc đúng quý và năm, không tính lịch tương lai là đã dạy.
     public async Task<CoachTeachingReport> GetOwnAsync(int actorId, int year, int quarter, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actorId, UserRole.Coach, ct);
         return await ReadCoachAsync(actorId, year, quarter, ct);
     }
 
+    // Quản lý xem giảng dạy của một huấn luyện viên trong quý.
+    // Nghiệp vụ: Kiểm tra tài khoản quản lý đang hoạt động rồi tổng hợp cùng quy tắc báo cáo cá nhân.
     public async Task<CoachTeachingReport> GetCoachAsync(int actorId, int coachId, int year, int quarter, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actorId, UserRole.Manager, ct);
         return await ReadCoachAsync(coachId, year, quarter, ct);
     }
 
+    // Quản lý xem tổng hợp giảng dạy toàn trung tâm.
+    // Nghiệp vụ: Nhóm theo huấn luyện viên trong quý; tách đã dạy, chưa kết thúc, chưa xác nhận, vắng và hủy.
     public async Task<CoachTeachingOverview> GetOverviewAsync(int actorId, int year, int quarter, CancellationToken ct)
     {
         await users.EnsureActiveActorAsync(actorId, UserRole.Manager, ct);
@@ -50,6 +56,8 @@ public sealed class CoachTeachingService(ICoachTeachingRepository reports, ISche
         return new(year, quarter, from, to, asOf, Summarize(coach, items), items, CountingRule);
     }
 
+    // Xác định khoảng ngày của quý báo cáo.
+    // Nghiệp vụ: Chấp nhận quý 1-4 và năm hợp lệ; trả từ đầu quý đến ngày cuối quý theo lịch.
     public static (DateOnly From, DateOnly To) QuarterRange(int year, int quarter)
     {
         if (year is < 2000 or > 2200 || quarter is < 1 or > 4)
