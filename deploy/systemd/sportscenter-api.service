@@ -1,0 +1,19 @@
+[Unit]
+Description=SportsCenter API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/sportscenter-api
+ExecStart=/usr/bin/dotnet /var/www/sportscenter-api/SportsCenter.API.dll
+Restart=always
+RestartSec=5
+User=ubuntu
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://localhost:5000
+# Secrets (DB/Jwt/PayOs/Smtp) go in this file, not here or in git. Format: one KEY=VALUE per line,
+# nested config keys use __ (double underscore), e.g. ConnectionStrings__Default=..., Jwt__Key=...
+EnvironmentFile=/var/www/sportscenter-api/.env
+
+[Install]
+WantedBy=multi-user.target
