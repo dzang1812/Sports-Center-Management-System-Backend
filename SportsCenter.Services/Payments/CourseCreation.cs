@@ -73,6 +73,7 @@ public sealed partial class Flow2CommerceService
                 audit.AddAudit(actor, "Course.Create", nameof(Class), course.Id,
                     new { request, plan.SessionCount, plan.TotalFee, plan.RangeEndExclusive });
                 await tx.SaveChangesAsync(token);
+                RequireMinimumEnrollmentWindow(request.EnrollmentClosesAt);
                 if (request.OpenRegistration) RequireOpeningWindow(plan);
                 return new CreatedCourse(course.Id, course.Status, plan.SessionCount, plan.TotalFee);
             }, ct);
@@ -106,8 +107,9 @@ public sealed partial class Flow2CommerceService
             Invalid("COURSE_CUTOFF_REQUIRED", "Chưa có hạn chót đăng ký.", "enrollmentClosesAt");
         if (r.EnrollmentClosesAt.Kind != DateTimeKind.Utc)
             Invalid("COURSE_CUTOFF_INVALID", "Hạn đăng ký cần UTC có Z; giao diện nhập theo giờ Việt Nam.", "enrollmentClosesAt");
-        if (r.EnrollmentClosesAt > clock.ToUtc(dates[0], r.StartTime))
-            Invalid("COURSE_CUTOFF_AFTER_START", "Hạn đăng ký không được sau buổi học đầu tiên.", "enrollmentClosesAt");
+        RequireMinimumEnrollmentWindow(r.EnrollmentClosesAt);
+        if (r.EnrollmentClosesAt >= clock.ToUtc(r.StartDate, TimeOnly.MinValue))
+            Invalid("COURSE_START_BEFORE_CUTOFF", "Ngày bắt đầu phải sau ngày hạn chót đăng ký (giờ Việt Nam).", "startDate");
         var sport = await repo.GetSportOrDefaultAsync(r.SportId, ct);
         if (sport is null || sport.Status != SportStatus.Active || !sport.HasClasses)
             Invalid("COURSE_SPORT_UNAVAILABLE", "Chọn bộ môn lớp học đang hoạt động.", "sportId");
@@ -124,6 +126,12 @@ public sealed partial class Flow2CommerceService
             r.EnrollmentClosesAt, clock.UtcNow < r.EnrollmentClosesAt && clock.UtcNow < clock.ToUtc(dates[0], r.StartTime), sessions, busy);
         if (r.OpenRegistration) RequireOpeningWindow(plan);
         return plan;
+    }
+
+    private void RequireMinimumEnrollmentWindow(DateTime cutoff)
+    {
+        if (cutoff < clock.UtcNow.AddDays(7))
+            throw new SchedulingException("COURSE_CUTOFF_INVALID", "Hạn chót đăng ký phải cách thời điểm tạo khóa ít nhất 7 ngày.", 400, new { field = "enrollmentClosesAt" });
     }
 
     // Kiểm tra thời điểm được mở đăng ký khóa.
