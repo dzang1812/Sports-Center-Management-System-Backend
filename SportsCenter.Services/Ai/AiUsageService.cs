@@ -7,7 +7,7 @@ namespace SportsCenter.Services.Ai;
 
 public interface IAiUsageService
 {
-    /// <summary>Checks membership, monthly budget and daily quota, then reserves one quota slot before OpenAI is called (so retries cannot dodge the limit).</summary>
+    /// <summary>Checks membership (not for chat), monthly budget and daily quota, then reserves one quota slot before OpenAI is called (so retries cannot dodge the limit).</summary>
     Task<AiUsageCheckResult> CheckAndReserveAsync(int userId, AiFeature feature, CancellationToken ct = default);
     Task<bool> HasActiveSubscriptionAsync(int userId, CancellationToken ct = default);
     /// <summary>Visitor (not logged in) chat: monthly budget, per-IP daily limit and a global daily cap. No membership needed.</summary>
@@ -39,7 +39,8 @@ public class AiUsageService(IAiRepository repo, IAppClock clock, IConfiguration 
 
     public async Task<AiUsageCheckResult> CheckAndReserveAsync(int userId, AiFeature feature, CancellationToken ct = default)
     {
-        if (!await HasActiveSubscriptionAsync(userId, ct))
+        // Chat stays open to every member (ChatAsync limits it to center info without a package); the other features need one.
+        if (feature != AiFeature.Chat && !await HasActiveSubscriptionAsync(userId, ct))
             return AiUsageCheckResult.Deny("SUBSCRIPTION_REQUIRED", "Tính năng AI chỉ dành cho hội viên có gói đang hoạt động.");
 
         var budget = await repo.GetBudgetAsync(Period(), ct);
