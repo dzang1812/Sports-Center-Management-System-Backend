@@ -103,6 +103,9 @@ public partial class AiService
 
         var exercises = await repo.ExercisesAsync(ct);
         var health = HealthGuard.Assess(request.HealthIssues, exercises);
+        var split = PlanSplit.For(request.TrainingDays);
+        var splitText = split is null ? "" : "\n\nSPLIT_PLAN (bắt buộc dùng đúng kiểu chia và đúng ngày, không đổi):\n" + string.Join("\n", split.Select(s => $"- {s.Day}: {s.Split}"))
+            + "\nQuy ước: mỗi buổi Full Body phải có ít nhất 1 bài chân, 1 bài đẩy, 1 bài kéo và 1 bài core (focus ghi \"Full Body - Toàn thân\"); Upper cân bằng đẩy và kéo; Lower gồm đùi, mông, bắp chân và core ở cuối; mỗi buổi đủ số bài theo trình độ; planName phản ánh đúng kiểu chia (ví dụ \"Tăng cơ Upper/Lower/Full Body 3 buổi\").";
 
         var messages = new object[]
         {
@@ -117,7 +120,7 @@ public partial class AiService
                     {MemberJson(member)}
 
                     FORM_SELECTIONS:
-                    {form}
+                    {form}{splitText}
 
                     VALID_EXERCISES:
                     {ExerciseJson(exercises, health.BannedExerciseIds)}
@@ -268,12 +271,12 @@ QUY TẮC THIẾT KẾ LỊCH TẬP (BẮT BUỘC, ÁP DỤNG THEO THỨ TỰ):
 - Nếu người dùng chưa khai báo sức khỏe ("Không khai báo" hoặc không đề cập), vẫn áp dụng rule theo tuổi/BMI ở mục 5 và nhắc 1 câu cuối response: "Nếu bạn có chấn thương hoặc bệnh nền, hãy cho mình biết để điều chỉnh lịch." Không tự suy đoán bệnh.
 - Không chẩn đoán y tế, không hứa hẹn chữa bệnh.
 
-1. CHỌN KIỂU CHIA LỊCH THEO SỐ BUỔI/TUẦN (dùng đúng các ngày người dùng chọn):
-- 2 buổi: Full Body x2, cách nhau ít nhất 2 ngày.
-- 3 buổi: Full Body, hoặc Upper / Lower / Full Body. Mặc định cho người mới.
-- 4 buổi: LUÔN Upper / Lower / Upper / Lower theo thứ tự các ngày đã chọn (xen kẽ, kể cả người mới). Không dùng Full Body cho 4 buổi vì nhóm cơ bị tập quá dày. Không tạo buổi chỉ có core: ghép 1-2 bài core vào cuối buổi Lower.
-- 5 buổi: Push / Pull / Legs / Upper / Lower. Chỉ cho trình độ Intermediate trở lên.
-- 6 buổi: Push / Pull / Legs x2. Chỉ cho Advanced, và phải nhắc nghỉ đủ trong notes.
+1. CHỌN KIỂU CHIA LỊCH THEO SỐ BUỔI VÀ KHOẢNG NGHỈ GIỮA CÁC NGÀY (dùng đúng các ngày người dùng chọn; nếu có SPLIT_PLAN thì BẮT BUỘC dùng đúng SPLIT_PLAN đó):
+- Các ngày tập CÁCH ĐỀU (giữa hai buổi liên tiếp, kể cả từ cuối tuần sang đầu tuần, luôn có ít nhất 1 ngày nghỉ và các khoảng cách chênh nhau không quá 1 ngày, ví dụ T2-T4-T6 hoặc T2-T5): dùng Full Body cho mọi buổi, vì mỗi nhóm cơ đã được nghỉ đủ giữa các buổi. Đây là lựa chọn mặc định cho người mới (3 buổi cách đều = Full Body x3).
+- Số buổi CHẴN (2, 4, 6) mà không cách đều: ưu tiên Upper / Lower xen kẽ theo thứ tự các ngày (ví dụ 4 buổi: Upper, Lower, Upper, Lower; 2 buổi liền nhau: Upper, Lower). Không dùng Full Body cho 4 buổi vì nhóm cơ bị tập quá dày.
+- Số buổi LẺ (3, 5) mà không cách đều: Upper / Lower xen kẽ cho các buổi đầu; buổi CUỐI là Full Body nếu ngay trước nó có ít nhất 1 ngày nghỉ (ví dụ T2 Upper, T3 Lower, T5 Full Body). Nếu buổi cuối sát ngay sau một buổi tập khác (không có ngày nghỉ) thì tiếp tục xen kẽ Upper / Lower, không dùng Full Body.
+- 5 buổi chỉ cho Intermediate trở lên. Nếu chưa có ngày cụ thể, tự chọn ngày để có khoảng nghỉ (ví dụ 3 buổi: T2-T4-T6; 4 buổi: T2-T3-T5-T6).
+- 6 buổi chỉ cho Advanced (Upper / Lower xen kẽ, giảm volume mỗi buổi, nhắc nghỉ đủ trong notes). Full Body: 5-6 bài đa khớp phủ chân, đẩy, kéo, core (2-3 hiệp/bài), đổi biến thể so với các buổi Upper/Lower trước, cường độ vừa phải. Upper: cân bằng đẩy và kéo 1:1. Lower: đùi trước, đùi sau, mông, bắp chân và 1-2 bài core ở cuối. Không tạo buổi chỉ có core.
 - 7 buổi: không xếp. Luôn có ít nhất 1 ngày nghỉ hoàn toàn trong tuần.
 - Không xếp hai buổi nặng cùng nhóm cơ ở hai ngày liên tiếp; mỗi nhóm cơ lớn cách nhau tối thiểu 48 giờ. Nếu số buổi cho phép, mỗi nhóm cơ lớn được tập 2 lần/tuần.
 
