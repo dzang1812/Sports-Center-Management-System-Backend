@@ -170,6 +170,12 @@ Trả về JSON đúng schema.
         catch (JsonException) { return failed; }
     }
 
+    private static Process? StartFfmpeg(ProcessStartInfo info)
+    {
+        try { return Process.Start(info); }
+        catch (System.ComponentModel.Win32Exception) { throw new AuthException("Máy chủ chưa cài FFmpeg nên chưa phân tích được video. Vui lòng liên hệ quản trị viên."); }
+    }
+
     /// <summary>Needs the ffmpeg binary on PATH: samples up to 12 frames (2 fps) and sends them to the vision model.</summary>
     public async Task<VideoFormAnalyzeResponseDto> AnalyzeFormVideoAsync(int userId, Stream video, string fileName, CancellationToken ct = default)
     {
@@ -180,7 +186,7 @@ Trả về JSON đúng schema.
             var input = Path.Combine(dir, Path.GetFileName(fileName));
             await using (var file = File.Create(input)) await video.CopyToAsync(file, ct);
 
-            using var ffmpeg = Process.Start(new ProcessStartInfo
+            using var ffmpeg = StartFfmpeg(new ProcessStartInfo
             {
                 FileName = "ffmpeg",
                 Arguments = $"-i \"{input}\" -vf \"fps=2,scale=768:-1\" -frames:v 12 \"{Path.Combine(dir, "frame_%03d.jpg")}\"",
@@ -305,7 +311,7 @@ NHIỆM VỤ CHÍNH:
 5. Không được khen chung chung nếu có lỗi rõ ràng.
 
 QUY TẮC BẮT BUỘC:
-1. Ưu tiên tìm lỗi form trước, sau đó mới nói điểm đúng.
+1. Đánh giá CÔNG BẰNG và cân bằng: nêu cả điểm đúng lẫn lỗi, không soi quá khắt khe. Người tập bình thường, kể cả người mới, có vài lỗi nhỏ vẫn đạt mức "Form tạm ổn".
 2. Nếu thấy lỗi nguy hiểm, riskLevel = "high".
 3. Nếu lỗi form có thể gây chấn thương, isFormAcceptable = false.
 4. Nếu video không đủ rõ, confidence = "low" và isFormAcceptable = false.
@@ -313,9 +319,9 @@ QUY TẮC BẮT BUỘC:
 6. Không chẩn đoán y tế.
 7. Không nói "form tốt" nếu vẫn có lỗi lớn.
 8. Không được viết quá tích cực nếu video thể hiện form sai.
-9. Chỉ nhận xét dựa trên những gì thấy được trong frame.
+9. Chỉ nhận xét dựa trên những gì thấy được trong frame. Bạn chỉ có khoảng 12 khung hình rời rạc nên KHÔNG nhận xét về tốc độ, nhịp hay việc dùng đà trừ khi thấy rõ qua nhiều khung hình liên tiếp.
 10. Trả lời bằng tiếng Việt.
-11. Nếu không nhìn rõ toàn bộ động tác, không được pass form.
+11. Nếu thấy được phần lớn động tác thì vẫn đánh giá bình thường; chỉ coi là không đủ dữ liệu khi gần như không thấy người tập hoặc không thấy chuyển động.
 12. Nếu có majorIssues thì isFormAcceptable bắt buộc là false.
 
 TIÊU CHÍ ĐÁNH GIÁ CHUNG:
@@ -324,14 +330,14 @@ TIÊU CHÍ ĐÁNH GIÁ CHUNG:
 - Core có được kiểm soát không?
 - Có dùng đà quá nhiều không?
 - Biên độ chuyển động có hợp lý không?
-- Tốc độ động tác có kiểm soát không?
+- Tốc độ chỉ nhận xét khi thấy rõ (khung hình rời rạc nên thường không đủ căn cứ).
 - Đường đi của khớp có an toàn không?
 - Có dấu hiệu mất kiểm soát tạ/máy không?
 
 CÁCH CHẤM:
 - Nếu có từ 1 lỗi nguy hiểm trở lên: riskLevel = "high", isFormAcceptable = false.
-- Nếu có nhiều lỗi kỹ thuật nhưng chưa quá nguy hiểm: riskLevel = "medium", isFormAcceptable = false.
-- Nếu chỉ có lỗi nhỏ và video đủ rõ: riskLevel = "low", isFormAcceptable = true.
+- Nếu chỉ có lỗi kỹ thuật nhỏ hoặc vừa, không nguy hiểm: ghi vào minorIssues (KHÔNG ghi vào majorIssues), riskLevel = "low" hoặc "medium", isFormAcceptable = true, overallVerdict = "Form tạm ổn".
+- Nếu hầu như không có lỗi và video đủ rõ: riskLevel = "low", isFormAcceptable = true, overallVerdict = "Form tốt".
 - Nếu không đủ rõ để đánh giá: confidence = "low", isFormAcceptable = false.
 - Nếu không nhận diện chắc bài tập: confidence = "low", isFormAcceptable = false.
 
@@ -340,7 +346,7 @@ YÊU CẦU OUTPUT:
 - detectedExercise = bài tập bạn quan sát được, hoặc "Không chắc chắn".
 - overallVerdict phải nói rõ: "Form chưa đạt", "Form tạm ổn", hoặc "Form tốt".
 - Nếu isFormAcceptable = false thì overallVerdict không được là "Form tốt".
-- majorIssues phải liệt kê lỗi lớn nếu có.
+- majorIssues CHỈ dành cho lỗi thật sự nguy hiểm và nhìn rõ trong nhiều khung hình (ví dụ lưng cong mạnh khi nâng nặng, gối khụy vào trong, thả tạ mất kiểm soát). Dùng đà nhẹ, nhún vai nhẹ, nghiêng người nhẹ, biên độ chưa đủ chỉ là minorIssues.
 - minorIssues liệt kê lỗi nhỏ nếu có.
 - correctPoints chỉ liệt kê điểm đúng thật sự quan sát được.
 - correctiveCues phải là câu hướng dẫn sửa ngắn gọn, dễ làm.
