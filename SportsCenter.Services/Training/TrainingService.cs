@@ -52,6 +52,8 @@ public interface ITrainingService
     Task<List<PlanDto>> PlansAsync(int memberId, CancellationToken ct);
     Task<PlanDto> SavePlanAsync(int memberId, int? planId, SavePlanDto dto, CancellationToken ct);
     Task ActivateAsync(int memberId, int planId, CancellationToken ct);
+    /// <summary>Copies a coach-made plan into the member's own plans and makes it the active one (reuses the copy on a second call).</summary>
+    Task<PlanDto> UsePlanAsync(int memberId, int planId, CancellationToken ct);
     Task DeleteAsync(int memberId, int planId, CancellationToken ct);
 }
 
@@ -136,9 +138,44 @@ public class TrainingService(ITrainingRepository repo, IAppClock clock) : ITrain
     public async Task ActivateAsync(int memberId, int planId, CancellationToken ct)
     {
         var plan = await repo.OwnedPlanAsync(memberId, planId, ct) ?? throw new AuthException("Không tìm thấy lịch tập.");
+        if (plan.IsActive) return; // already in use; deactivating first would leave it off because the tracked flag does not change
         await repo.DeactivatePlansAsync(memberId, ct);
         plan.IsActive = true;
         await repo.SaveChangesAsync(ct);
+    }
+
+    public async Task<PlanDto> UsePlanAsync(int memberId, int planId, CancellationToken ct)
+    {
+        var plans = await repo.PlansAsync(memberId, ct);
+        var source = plans.FirstOrDefault(p => p.Id == planId && p.CoachId != null)
+            ?? throw new AuthException("Không tìm thấy giáo án của HLV.");
+
+        // The copy remembers its source in the description, so using the same plan twice does not create duplicates.
+        var marker = $"Từ giáo án của HLV (#{source.Id})";
+        var copy = plans.FirstOrDefault(p => p.CoachId == null && p.Description != null && p.Description.StartsWith(marker));
+        if (copy is not null)
+        {
+            await ActivateAsync(memberId, copy.Id, ct);
+            return ToDto((await repo.PlansAsync(memberId, ct)).First(p => p.Id == copy.Id));
+        }
+
+        var description = $"{marker} {source.Coach?.FullName}. {source.Description}".Trim();
+        return await SavePlanAsync(memberId, null, new SavePlanDto
+        {
+            Title = source.Title,
+            Goal = source.Goal,
+            Description = description.Length > 500 ? description[..500] : description,
+            Activate = true,
+            Sessions = [.. source.Sessions.Select(s => new SavePlanSessionDto
+            {
+                DayOfWeek = s.DayOfWeek,
+                Focus = s.Focus,
+                Items = [.. source.Items.Where(i => i.SessionId == s.Id).OrderBy(i => i.OrderNo).Select(i => new SavePlanItemDto
+                {
+                    ExerciseId = i.ExerciseId, Sets = Math.Clamp(i.Sets ?? 3, 1, 20), Reps = i.RepsText ?? i.Reps?.ToString(), Notes = i.Notes,
+                })],
+            })],
+        }, ct);
     }
 
     public async Task DeleteAsync(int memberId, int planId, CancellationToken ct)
