@@ -19,11 +19,13 @@ public record PagedResult<T>(List<T> Items, int Total, int Page, int PageSize);
 // Manager creates Coach / Receptionist accounts; Specialties are sport names (Gym, Boxing, Yoga, GroupX), Coach only.
 public record CreateUserRequest(
     [param: Required(ErrorMessage = "Email là bắt buộc"), EmailAddress(ErrorMessage = "Email sai định dạng")] string Email,
-    [param: Required(ErrorMessage = "Họ tên là bắt buộc")] string FullName,
-    string? Phone, UserRole Role, string[]? Specialties, string? AvatarUrl = null);
+    [param: Required(ErrorMessage = "Họ tên là bắt buộc"), StringLength(100, ErrorMessage = "Họ tên tối đa 100 ký tự")] string FullName,
+    [param: Phone(ErrorMessage = "Số điện thoại sai định dạng")] string? Phone, UserRole Role, string[]? Specialties, string? AvatarUrl = null);
 
 // Email is not editable.
-public record UpdateUserRequest([param: Required(ErrorMessage = "Họ tên là bắt buộc")] string FullName, string? Phone,
+public record UpdateUserRequest(
+    [param: Required(ErrorMessage = "Họ tên là bắt buộc"), StringLength(100, ErrorMessage = "Họ tên tối đa 100 ký tự")] string FullName,
+    [param: Phone(ErrorMessage = "Số điện thoại sai định dạng")] string? Phone,
     string[]? Specialties, string? AvatarUrl = null);
 
 public record CreatedUserResponse(UserListItem User, string TempPassword);

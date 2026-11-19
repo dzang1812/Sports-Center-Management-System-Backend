@@ -43,6 +43,10 @@ public class TrainingController(ITrainingService training) : ControllerBase
     public Task<IActionResult> Activate(int id, CancellationToken ct) =>
         Run(async () => { await training.ActivateAsync(UserId, id, ct); return NoContent(); });
 
+    [HttpPost("api/member/training-plans/{id:int}/use"), Authorize(Roles = "Member")]
+    public Task<IActionResult> UseCoachPlan(int id, CancellationToken ct) =>
+        Run(async () => Ok(await training.UsePlanAsync(UserId, id, ct)));
+
     [HttpDelete("api/member/training-plans/{id:int}"), Authorize(Roles = "Member")]
     public Task<IActionResult> Delete(int id, CancellationToken ct) =>
         Run(async () => { await training.DeleteAsync(UserId, id, ct); return NoContent(); });
